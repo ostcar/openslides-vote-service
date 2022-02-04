@@ -3,6 +3,21 @@
 The Vote Service is part of the OpenSlides environments. It handles the votes
 for an electonic poll.
 
+The Vote Service consists of two components. The collector and the decrypter.
+Both components can be started together or separatly.
+
+The collector is part of the OpenSlides stack. It gets the instractions from the
+backend when to start or stop a poll. It collects the votes from the users,
+saves them and relay them to the backend at the end of the poll.
+
+The decrypter has access to the private cryptographic keys. It decryptes the
+votes from the users, valides them and in the end generates a singed list of all
+delivered votes.
+
+If the Vote Service is started with the environment varialbe `VOTE_MAIN_KEY`
+then it starts both components. In other case, it only starts the collector
+component and expects an external decrypt server.
+
 
 ## Install and Start
 
