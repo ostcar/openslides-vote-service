@@ -3,7 +3,9 @@ package decrypt
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/rand"
 )
 
 // Decrypt holds the internal state of the decrypt component.
@@ -114,14 +116,60 @@ func (d *Decrypt) Validate(ctx context.Context, id string, vote []byte, meta Vot
 
 // Stop takes a list of ecrypted votes, decryptes them and returns them in a
 // random order.
-func (d *Decrypt) Stop(ctx context.Context, id string, voteList [][]byte) (decryptedVoteList []byte, err error) {
-	return nil, nil
+func (d *Decrypt) Stop(ctx context.Context, id string, voteList [][]byte) (decryptedVoteList, signature []byte, err error) {
+	var pd pollData
+	storeData, err := d.store.Load(id)
+	if err != nil {
+		return nil, nil, fmt.Errorf("loading poll data: %w", err)
+	}
+
+	if storeData == nil {
+		return nil, nil, fmt.Errorf("unknown poll %s", id)
+	}
+
+	if err := json.Unmarshal(storeData, &pd); err != nil {
+		return nil, nil, fmt.Errorf("decoding poll data: %w", err)
+	}
+
+	decrypted := make([]json.RawMessage, len(voteList))
+	for i, vote := range voteList {
+		plain, err := d.crypto.Decrypt(pd.Key, vote)
+		if err != nil {
+			return nil, nil, fmt.Errorf("decrypting vote: %w", err)
+		}
+		decrypted[i] = plain
+	}
+
+	// TODO: use crypt/rand
+	rand.Shuffle(len(decrypted), func(i, j int) {
+		decrypted[i], decrypted[j] = decrypted[j], decrypted[i]
+	})
+
+	content := struct {
+		Meta  PollMeta          `json:"meta"`
+		Votes []json.RawMessage `json:"votes"`
+	}{
+		pd.Meta,
+		decrypted,
+	}
+
+	decryptedVoteList, err = json.Marshal(content)
+	if err != nil {
+		return nil, nil, fmt.Errorf("encoding content: %w", err)
+	}
+
+	signature, err = d.crypto.Sign(decryptedVoteList)
+	if err != nil {
+		return nil, nil, fmt.Errorf("siging votes: %w", err)
+	}
+
+	return decryptedVoteList, signature, nil
 }
 
 // Clear stops a poll by removing the generated cryptographic key. After this
 // call, it is impossible to call Verify or Stop.
 func (d *Decrypt) Clear(ctx context.Context, id string) (auditlog []byte, err error) {
-	return nil, nil
+	return nil, errors.New("TODO")
 }
 
 // PollMeta contains all settings of a poll needed to validate the votes.
@@ -224,6 +272,9 @@ type Crypto interface {
 
 	// Decrypt returned the plaintext from value using the key.
 	Decrypt(key []byte, value []byte) ([]byte, error)
+
+	// Sign data.
+	Sign(value []byte) ([]byte, error)
 }
 
 // Store saves the data, that have to be persistend.

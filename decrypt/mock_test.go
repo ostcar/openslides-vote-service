@@ -1,6 +1,7 @@
 package decrypt_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,11 +15,6 @@ type cryptoStub struct {
 	pubGotKey string
 	pubKey    string
 	pubErr    error
-
-	decryptKey    []byte
-	decryptValue  []byte
-	decryptReturn string
-	decryptErr    error
 }
 
 func (c *cryptoStub) CreateKey() ([]byte, error) {
@@ -32,9 +28,15 @@ func (c *cryptoStub) SignedPubKey(key []byte) ([]byte, error) {
 }
 
 func (c *cryptoStub) Decrypt(key []byte, value []byte) ([]byte, error) {
-	c.decryptKey = key
-	c.decryptValue = value
-	return []byte(c.decryptReturn), c.decryptErr
+	v := bytes.TrimPrefix(value, []byte("enc:"))
+	if string(v) == string(value) {
+		return nil, fmt.Errorf("value not encrypted")
+	}
+	return v, nil
+}
+
+func (c *cryptoStub) Sign(value []byte) ([]byte, error) {
+	return append([]byte("sig:"), value...), nil
 }
 
 type AuditlogStub struct {

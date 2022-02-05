@@ -271,9 +271,9 @@ func TestValidate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			data, _ := json.Marshal(tt.meta)
 			store.loadData = fmt.Sprintf(`{"key":"ZnVsbC1rZXk=","meta":%s}`, data)
-			crypto.decryptReturn = fmt.Sprintf(`{"poll_id":"test/1","votes": %s}`, tt.vote)
+			encrypted := fmt.Sprintf(`enc:{"poll_id":"test/1","votes": %s}`, tt.vote)
 
-			valid, err := d.Validate(context.Background(), "test/1", []byte("encrypted"), decrypt.VoteMeta{})
+			valid, err := d.Validate(context.Background(), "test/1", []byte(encrypted), decrypt.VoteMeta{})
 			if err != nil {
 				t.Fatalf("validate: %v", err)
 			}
