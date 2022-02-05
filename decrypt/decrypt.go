@@ -168,8 +168,8 @@ func (d *Decrypt) Stop(ctx context.Context, id string, voteList [][]byte) (decry
 
 // Clear stops a poll by removing the generated cryptographic key. After this
 // call, it is impossible to call Verify or Stop.
-func (d *Decrypt) Clear(ctx context.Context, id string) (auditlog []byte, err error) {
-	return nil, errors.New("TODO")
+func (d *Decrypt) Clear(ctx context.Context, id string) (auditlog, signatrue []byte, err error) {
+	return nil, nil, errors.New("TODO")
 }
 
 // PollMeta contains all settings of a poll needed to validate the votes.

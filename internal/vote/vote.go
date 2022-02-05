@@ -6,28 +6,43 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/datastore"
+	"github.com/OpenSlides/openslides-vote-service/decrypt"
 	"github.com/OpenSlides/openslides-vote-service/internal/log"
 )
+
+// Decrypter decryptes the incomming votes.
+type Decrypter interface {
+	Start(ctx context.Context, id string, meta decrypt.PollMeta) (pubKey []byte, err error)
+	Validate(ctx context.Context, id string, vote []byte, meta decrypt.VoteMeta) (bool, error)
+	Stop(ctx context.Context, id string, voteList [][]byte) (decryptedVoteList, signature []byte, err error)
+	Clear(ctx context.Context, id string) (auditlog, signatrue []byte, err error)
+}
 
 // Vote holds the state of the service.
 //
 // Vote has to be initializes with vote.New().
 type Vote struct {
+	url         string
 	fastBackend Backend
 	longBackend Backend
 	ds          datastore.Getter
 	counter     Counter
+	decrypter   Decrypter
 }
 
 // New creates an initializes vote service.
-func New(fast, long Backend, ds datastore.Getter, counter Counter) *Vote {
+func New(url string, fast, long Backend, ds datastore.Getter, counter Counter, decrypter Decrypter) *Vote {
 	return &Vote{
+		url:         url,
 		fastBackend: fast,
 		longBackend: long,
 		ds:          ds,
 		counter:     counter,
+		decrypter:   decrypter,
 	}
 }
 
@@ -40,12 +55,16 @@ func (v *Vote) backend(p pollConfig) Backend {
 	return backend
 }
 
+func (v *Vote) qualifiedID(id int) string {
+	return fmt.Sprintf("%s/%d", v.url, id)
+}
+
 // Create an electronic vote.
 //
 // This function is idempotence. If you call it with the same input, you will
 // get the same output. This means, that when a poll is stopped, Create() will
 // not throw an error.
-func (v *Vote) Create(ctx context.Context, pollID int) (err error) {
+func (v *Vote) Create(ctx context.Context, pollID int) (pubkey []byte, err error) {
 	log.Debug("Receive create event for poll %d", pollID)
 	defer func() {
 		log.Debug("End create event with error: %v", err)
@@ -56,28 +75,33 @@ func (v *Vote) Create(ctx context.Context, pollID int) (err error) {
 
 	poll, err := loadPoll(ctx, ds, pollID)
 	if err != nil {
-		return fmt.Errorf("loading poll: %w", err)
+		return nil, fmt.Errorf("loading poll: %w", err)
 	}
 
 	if poll.pollType == "analog" {
-		return MessageError{ErrInvalid, "Analog poll can not be created"}
+		return nil, MessageError{ErrInvalid, "Analog poll can not be created"}
 	}
 
 	if poll.state != "started" {
-		return MessageError{ErrInternal, fmt.Sprintf("Poll state is %s, only started polls can be created", poll.state)}
+		return nil, MessageError{ErrInternal, fmt.Sprintf("Poll state is %s, only started polls can be created", poll.state)}
 	}
 
 	if err := poll.preload(ctx, ds); err != nil {
-		return fmt.Errorf("preloading data: %w", err)
+		return nil, fmt.Errorf("preloading data: %w", err)
 	}
 	log.Debug("Preload cache. Received keys: %v", recorder.Keys())
 
-	backend := v.backend(poll)
-	if err := backend.Start(ctx, pollID); err != nil {
-		return fmt.Errorf("starting poll in the backend: %w", err)
+	pubkey, err = v.decrypter.Start(ctx, v.qualifiedID(pollID), poll.meta())
+	if err != nil {
+		return nil, fmt.Errorf("starting poll in decrypter: %w", err)
 	}
 
-	return nil
+	backend := v.backend(poll)
+	if err := backend.Start(ctx, pollID); err != nil {
+		return nil, fmt.Errorf("starting poll in the backend: %w", err)
+	}
+
+	return pubkey, nil
 }
 
 // Stop ends a poll.
@@ -553,6 +577,23 @@ func (p pollConfig) preload(ctx context.Context, ds *datastore.Request) error {
 		return fmt.Errorf("preloading delegated users: %w", err)
 	}
 	return nil
+}
+
+func (p pollConfig) meta() decrypt.PollMeta {
+	options := make([]string, len(p.options))
+	for i, o := range p.options {
+		options[i] = strconv.Itoa(o)
+	}
+
+	return decrypt.PollMeta{
+		Method:        p.method,
+		GlobalYes:     p.globalYes,
+		GlobalNo:      p.globalNo,
+		GlobalAbstain: p.globalAbstain,
+		Options:       strings.Join(options, ","),
+		MaxAmount:     p.maxAmount,
+		MinAmount:     p.minAmount,
+	}
 }
 
 type maybeInt struct {
