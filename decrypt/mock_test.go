@@ -1,61 +1,95 @@
 package decrypt_test
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"io"
 )
 
 type cryptoStub struct {
-	mainKey []byte
+	createKey    string
+	createErr    error
+	calledCreate bool
 
-	pollKey []byte
-	err     error
+	pubGotKey string
+	pubKey    string
+	pubErr    error
+
+	decryptKey    []byte
+	decryptValue  []byte
+	decryptReturn string
+	decryptErr    error
 }
 
-func (c *cryptoStub) CreateKey(mainKey []byte) (pollKey []byte, err error) {
-	c.mainKey = mainKey
-	return c.pollKey, c.err
+func (c *cryptoStub) CreateKey() ([]byte, error) {
+	c.calledCreate = true
+	return []byte(c.createKey), c.createErr
+}
+
+func (c *cryptoStub) SignedPubKey(key []byte) ([]byte, error) {
+	c.pubGotKey = string(key)
+	return []byte(c.pubKey), c.pubErr
+}
+
+func (c *cryptoStub) Decrypt(key []byte, value []byte) ([]byte, error) {
+	c.decryptKey = key
+	c.decryptValue = value
+	return []byte(c.decryptReturn), c.decryptErr
 }
 
 type AuditlogStub struct {
-	id      string
-	event   string
-	message string
-
 	messages []string
-	err      error
+	logErr   error
+
+	loadID       string
+	loadMessages []string
+	loadErr      error
 }
 
-func (al *AuditlogStub) Log(ctx context.Context, id string, event string, format string, a ...interface{}) error {
-	al.id = id
-	al.event = event
-	al.message = fmt.Sprintf(format, a...)
-	return al.err
+func (al *AuditlogStub) Log(ctx context.Context, id string, event string, payload interface{}) error {
+	p, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("encoding payload: %w", err)
+	}
+
+	msg := fmt.Sprintf("%s:%s:%s", id, event, p)
+	al.messages = append(al.messages, msg)
+	return al.logErr
 }
 
 func (al *AuditlogStub) Load(ctx context.Context, id string) ([]string, error) {
-	al.id = id
-
-	return al.messages, al.err
+	al.loadID = id
+	return al.loadMessages, al.loadErr
 }
 
 type StoreStub struct {
-	written []byte
-	id      string
+	saveData string
+	saveID   string
+	saveErr  error
 
-	read []byte
-	err  error
+	loadID   string
+	loadData string
+	loadErr  error
+
+	deleteID  string
+	deleteErr error
 }
 
-func (s *StoreStub) Save(w io.Writer, id string) error {
-	w.Write(s.written)
-	s.id = id
-	return s.err
+func (s *StoreStub) Save(id string, data []byte) error {
+	s.saveData = string(data)
+	s.saveID = id
+	return s.saveErr
 }
 
-func (s *StoreStub) Load(id string) (io.Reader, error) {
-	s.id = id
-	return bytes.NewReader(s.read), s.err
+func (s *StoreStub) Load(id string) ([]byte, error) {
+	s.loadID = id
+	if s.loadData == "" {
+		return nil, s.loadErr
+	}
+	return []byte(s.loadData), s.loadErr
+}
+
+func (s *StoreStub) Delete(id string) error {
+	s.deleteID = id
+	return s.deleteErr
 }
