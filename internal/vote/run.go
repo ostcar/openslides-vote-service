@@ -11,6 +11,7 @@ import (
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/auth"
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/datastore"
 	messageBusRedis "github.com/OpenSlides/openslides-autoupdate-service/pkg/redis"
+	"github.com/OpenSlides/openslides-vote-service/decrypt"
 	"github.com/OpenSlides/openslides-vote-service/internal/backends/memory"
 	"github.com/OpenSlides/openslides-vote-service/internal/backends/postgres"
 	"github.com/OpenSlides/openslides-vote-service/internal/backends/redis"
@@ -53,10 +54,17 @@ func Run(ctx context.Context, environment []string, getSecret func(name string) 
 		return fmt.Errorf("building backends: %w", err)
 	}
 
-	service := New(fastBackend, longBackend, ds, counter)
+	// TODO: also use grpc backend
+	// TODO: inizialize dependencies
+	decrypter := decrypt.New(nil, nil, nil)
+
+	service, err := New(fastBackend, longBackend, ds, counter, decrypter)
+	if err != nil {
+		return fmt.Errorf("creating vote service: %w", err)
+	}
 
 	mux := http.NewServeMux()
-	handleCreate(mux, service)
+	handleStart(mux, service)
 	handleStop(mux, service)
 	handleClear(mux, service)
 	handleClearAll(mux, service)

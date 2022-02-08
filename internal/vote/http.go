@@ -2,6 +2,7 @@ package vote
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,15 +18,15 @@ const (
 	httpPathExternal = "/system/vote"
 )
 
-type creater interface {
-	Create(ctx context.Context, pollID int) error
+type starter interface {
+	Start(ctx context.Context, pollID int) ([]byte, error)
 }
 
-func handleCreate(mux *http.ServeMux, create creater) {
+func handleStart(mux *http.ServeMux, start starter) {
 	mux.HandleFunc(
-		httpPathInternal+"/create",
+		httpPathInternal+"/start",
 		func(w http.ResponseWriter, r *http.Request) {
-			log.Info("Receive create request: %v", r)
+			log.Info("Receive start request: %v", r)
 			w.Header().Set("Content-Type", "application/json")
 
 			if r.Method != "POST" {
@@ -39,8 +40,19 @@ func handleCreate(mux *http.ServeMux, create creater) {
 				return
 			}
 
-			if err := create.Create(r.Context(), id); err != nil {
+			pubkey, err := start.Start(r.Context(), id)
+			if err != nil {
 				handleError(w, err, true)
+				return
+			}
+
+			content := struct {
+				PubKey string `json:"public_key"`
+			}{
+				string(pubkey),
+			}
+			if err := json.NewEncoder(w).Encode(content); err != nil {
+				http.Error(w, MessageError{ErrInternal, err.Error()}.Error(), 500)
 				return
 			}
 		},

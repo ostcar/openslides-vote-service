@@ -35,7 +35,16 @@ type Vote struct {
 }
 
 // New creates an initializes vote service.
-func New(url string, fast, long Backend, ds datastore.Getter, counter Counter, decrypter Decrypter) *Vote {
+func New(fast, long Backend, ds datastore.Getter, counter Counter, decrypter Decrypter) (*Vote, error) {
+	url := "TODO.example.com" // TODO: what is the best way to get the name? at startup? later? from the db or an environment variable?
+	// ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// defer cancel()
+
+	// url, err := datastore.NewRequest(ds).Organization_Url(1).Value(ctx)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("getting organization url: %v", err)
+	// }
+
 	return &Vote{
 		url:         url,
 		fastBackend: fast,
@@ -43,7 +52,7 @@ func New(url string, fast, long Backend, ds datastore.Getter, counter Counter, d
 		ds:          ds,
 		counter:     counter,
 		decrypter:   decrypter,
-	}
+	}, nil
 }
 
 func (v *Vote) backend(p pollConfig) Backend {
@@ -59,15 +68,15 @@ func (v *Vote) qualifiedID(id int) string {
 	return fmt.Sprintf("%s/%d", v.url, id)
 }
 
-// Create an electronic vote.
+// Start an electronic vote.
 //
 // This function is idempotence. If you call it with the same input, you will
-// get the same output. This means, that when a poll is stopped, Create() will
+// get the same output. This means, that when a poll is stopped, Start() will
 // not throw an error.
-func (v *Vote) Create(ctx context.Context, pollID int) (pubkey []byte, err error) {
-	log.Debug("Receive create event for poll %d", pollID)
+func (v *Vote) Start(ctx context.Context, pollID int) (pubkey []byte, err error) {
+	log.Debug("Receive start event for poll %d", pollID)
 	defer func() {
-		log.Debug("End create event with error: %v", err)
+		log.Debug("End start event with error: %v", err)
 	}()
 
 	recorder := datastore.NewRecorder(v.ds)
@@ -79,11 +88,11 @@ func (v *Vote) Create(ctx context.Context, pollID int) (pubkey []byte, err error
 	}
 
 	if poll.pollType == "analog" {
-		return nil, MessageError{ErrInvalid, "Analog poll can not be created"}
+		return nil, MessageError{ErrInvalid, "Analog poll can not be started"}
 	}
 
 	if poll.state != "started" {
-		return nil, MessageError{ErrInternal, fmt.Sprintf("Poll state is %s, only started polls can be created", poll.state)}
+		return nil, MessageError{ErrInternal, fmt.Sprintf("Poll state is %s, only started polls can be started in the vote service", poll.state)}
 	}
 
 	if err := poll.preload(ctx, ds); err != nil {

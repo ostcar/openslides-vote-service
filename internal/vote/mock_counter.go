@@ -107,7 +107,7 @@ func (c *MockCounter) Counters(ctx context.Context, id uint64, blocking bool) (n
 	}
 }
 
-// WaitForID waits for x votes before returing.
+// WaitForID waits until id x in the message bus before returing.
 func (c *MockCounter) WaitForID(id uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

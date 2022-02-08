@@ -70,12 +70,12 @@ docker run --network host --env OPENSLIDES_DEVELOPMENT=true openslides-vote-dev
 
 ### Start a Poll
 
-To start a poll a POST request has to be send to the create-url.
+To start a poll a POST request has to be send to the start-url.
 
 To send the same request twice is ok.
 
 ```
-curl -X POST localhost:9013/internal/vote/create?id=1 
+curl -X POST localhost:9013/internal/vote/start?id=1 
 ```
 
 
