@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+
+option go_package = "github.com/OpenSlides/openslides-vote-service/decrypt/grpc";
+
+service Decrypt {
+  rpc Start(StartRequest) returns (StartResponse);
+  rpc Validate(ValidateRequest) returns (ValidateResponse);
+  rpc Stop(StopRequest) returns (StopResponse);
+  rpc Clear(ClearRequest) returns (ClearResponse);
+}
+
+message PollMeta {
+  string method = 1;
+  bool global_yes = 2;
+  bool global_no = 3;
+  bool global_abstain = 4;
+  repeated int32 options = 5;
+  int32 max_amount = 6;
+  int32 min_amount = 7;
+}
+
+message StartRequest {
+  string id = 1;
+  PollMeta meta = 2;
+}
+
+message StartResponse {
+  string pub_key = 1;
+}
+
+message VoteMeta {
+  string weight = 1;
+}
+
+message ValidateRequest {
+  bool valid = 1;
+}
+
+message ValidateResponse {
+  bool valid = 1;
+}
+
+message StopRequest {
+  string id = 1;
+  repeated string votes = 2;
+}
+
+message StopResponse {
+  repeated string votes = 1;
+  string signature = 2;
+}
+
+message ClearRequest {
+  string id = 1;
+}
+
+message ClearResponse {
+  string audit_log = 1;
+  string signature = 2;
+}
