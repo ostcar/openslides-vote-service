@@ -2,96 +2,88 @@ package decrypt_test
 
 import (
 	"bytes"
-	"context"
-	"encoding/json"
 	"fmt"
 )
 
-type cryptoStub struct {
-	createKey    string
-	createErr    error
-	calledCreate bool
+type cryptoMock struct{}
 
-	pubGotKey string
-	pubKey    string
-	pubErr    error
+// PublicMainKey returns the public main key and the signature of the key.
+func (c cryptoMock) PublicMainKey(key []byte) (pubKey []byte, err error) {
+	return []byte("mainPubKey"), nil
 }
 
-func (c *cryptoStub) CreateKey() ([]byte, error) {
-	c.calledCreate = true
-	return []byte(c.createKey), c.createErr
+// CreatePollKey creates a new keypair for a poll.
+func (c cryptoMock) CreatePollKey() (key []byte, err error) {
+	return []byte("pollKey"), nil
 }
 
-func (c *cryptoStub) SignedPubKey(key []byte) ([]byte, error) {
-	c.pubGotKey = string(key)
-	return []byte(c.pubKey), c.pubErr
+// PublicPollKey returns the public poll key and the signature for a given key.
+func (c cryptoMock) PublicPollKey(key []byte) (pubKey []byte, pubKeySig []byte, err error) {
+	return []byte("pollPubKey"), []byte("pollKeySig"), nil
 }
 
-func (c *cryptoStub) Decrypt(key []byte, value []byte) ([]byte, error) {
-	v := bytes.TrimPrefix(value, []byte("enc:"))
-	if string(v) == string(value) {
-		return nil, fmt.Errorf("value not encrypted")
+// Decrypt returned the plaintext from value using the key.
+func (c cryptoMock) Decrypt(key []byte, value []byte) ([]byte, error) {
+	prefix := []byte("enc:")
+	return bytes.TrimPrefix(value, prefix), nil
+}
+
+// Returns the signature for the given data.
+func (c cryptoMock) Sign(value []byte) ([]byte, error) {
+	return []byte(fmt.Sprintf("sig:%s", value)), nil
+}
+
+type StoreMock struct {
+	keys       map[string][]byte
+	signatures map[string][]byte
+}
+
+func NewStoreMock() *StoreMock {
+	return &StoreMock{
+		keys:       make(map[string][]byte),
+		signatures: make(map[string][]byte),
 	}
-	return v, nil
 }
 
-func (c *cryptoStub) Sign(value []byte) ([]byte, error) {
-	return append([]byte("sig:"), value...), nil
+func (s *StoreMock) SaveKey(id string, key []byte) error {
+	s.keys[id] = key
+	return nil
 }
 
-type AuditlogStub struct {
-	messages []string
-	logErr   error
-
-	loadID       string
-	loadMessages []string
-	loadErr      error
+// LoadKey returns the private key from the store.
+//
+// If the poll is unknown return (nil, nil)
+func (s *StoreMock) LoadKey(id string) (key []byte, err error) {
+	return s.keys[id], nil
 }
 
-func (al *AuditlogStub) Log(ctx context.Context, id string, event string, payload interface{}) error {
-	p, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("encoding payload: %w", err)
+// ValidateSignature makes sure, that no other signature is saved for a
+// poll. Saves the signature for future calls.
+//
+// Has to return an error if the id is unknown in the store.
+func (s *StoreMock) ValidateSignature(id string, signature []byte) error {
+	if s.signatures[id] == nil {
+		s.signatures[id] = signature
+		return nil
 	}
-
-	msg := fmt.Sprintf("%s:%s:%s", id, event, p)
-	al.messages = append(al.messages, msg)
-	return al.logErr
-}
-
-func (al *AuditlogStub) Load(ctx context.Context, id string) ([]string, error) {
-	al.loadID = id
-	return al.loadMessages, al.loadErr
-}
-
-type StoreStub struct {
-	saveData string
-	saveID   string
-	saveErr  error
-
-	loadID   string
-	loadData string
-	loadErr  error
-
-	deleteID  string
-	deleteErr error
-}
-
-func (s *StoreStub) Save(id string, data []byte) error {
-	s.saveData = string(data)
-	s.saveID = id
-	return s.saveErr
-}
-
-func (s *StoreStub) Load(id string) ([]byte, error) {
-	s.loadID = id
-	if s.loadData == "" {
-		return nil, s.loadErr
+	if string(signature) != string(s.signatures[id]) {
+		return fmt.Errorf("%s != %s", signature, s.signatures[id])
 	}
-	return []byte(s.loadData), s.loadErr
+	return nil
 }
 
-func (s *StoreStub) Delete(id string) error {
-	s.deleteID = id
-	return s.deleteErr
+// Clear removes all data for the poll.
+func (s *StoreMock) Clear(id string) error {
+	delete(s.keys, id)
+	delete(s.signatures, id)
+	return nil
+}
+
+type readerMock struct{}
+
+func (r readerMock) Read(data []byte) (n int, err error) {
+	for i := 0; i < len(data); i++ {
+		data[i] = '0'
+	}
+	return len(data), nil
 }

@@ -16,10 +16,9 @@ import (
 
 // Decrypter decryptes the incomming votes.
 type Decrypter interface {
-	Start(ctx context.Context, id string, meta decrypt.PollMeta) (pubKey []byte, err error)
-	Validate(ctx context.Context, id string, vote []byte, meta decrypt.VoteMeta) (bool, error)
-	Stop(ctx context.Context, id string, voteList [][]byte) (decryptedVoteList, signature []byte, err error)
-	Clear(ctx context.Context, id string) (auditlog, signatrue []byte, err error)
+	Start(ctx context.Context, pollID string) (pubKey []byte, pubKeySig []byte, err error)
+	Stop(ctx context.Context, pollID string, voteList [][]byte) (decryptedContent, signature []byte, err error)
+	Clear(ctx context.Context, pollID string) error
 }
 
 // Vote holds the state of the service.
@@ -73,7 +72,7 @@ func (v *Vote) qualifiedID(id int) string {
 // This function is idempotence. If you call it with the same input, you will
 // get the same output. This means, that when a poll is stopped, Start() will
 // not throw an error.
-func (v *Vote) Start(ctx context.Context, pollID int) (pubkey []byte, err error) {
+func (v *Vote) Start(ctx context.Context, pollID int) (pubkey []byte, pubKeySig []byte, err error) {
 	log.Debug("Receive start event for poll %d", pollID)
 	defer func() {
 		log.Debug("End start event with error: %v", err)
@@ -84,33 +83,33 @@ func (v *Vote) Start(ctx context.Context, pollID int) (pubkey []byte, err error)
 
 	poll, err := loadPoll(ctx, ds, pollID)
 	if err != nil {
-		return nil, fmt.Errorf("loading poll: %w", err)
+		return nil, nil, fmt.Errorf("loading poll: %w", err)
 	}
 
 	if poll.pollType == "analog" {
-		return nil, MessageError{ErrInvalid, "Analog poll can not be started"}
+		return nil, nil, MessageError{ErrInvalid, "Analog poll can not be started"}
 	}
 
 	if poll.state != "started" {
-		return nil, MessageError{ErrInternal, fmt.Sprintf("Poll state is %s, only started polls can be started in the vote service", poll.state)}
+		return nil, nil, MessageError{ErrInternal, fmt.Sprintf("Poll state is %s, only started polls can be started in the vote service", poll.state)}
 	}
 
 	if err := poll.preload(ctx, ds); err != nil {
-		return nil, fmt.Errorf("preloading data: %w", err)
+		return nil, nil, fmt.Errorf("preloading data: %w", err)
 	}
 	log.Debug("Preload cache. Received keys: %v", recorder.Keys())
 
-	pubkey, err = v.decrypter.Start(ctx, v.qualifiedID(pollID), poll.meta())
+	pubkey, pubKeySig, err = v.decrypter.Start(ctx, v.qualifiedID(pollID))
 	if err != nil {
-		return nil, fmt.Errorf("starting poll in decrypter: %w", err)
+		return nil, nil, fmt.Errorf("starting poll in decrypter: %w", err)
 	}
 
 	backend := v.backend(poll)
 	if err := backend.Start(ctx, pollID); err != nil {
-		return nil, fmt.Errorf("starting poll in the backend: %w", err)
+		return nil, nil, fmt.Errorf("starting poll in the backend: %w", err)
 	}
 
-	return pubkey, nil
+	return pubkey, pubKeySig, nil
 }
 
 // Stop ends a poll.

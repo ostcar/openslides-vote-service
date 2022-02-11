@@ -19,7 +19,6 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DecryptClient interface {
 	Start(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error)
-	Validate(ctx context.Context, in *ValidateRequest, opts ...grpc.CallOption) (*ValidateResponse, error)
 	Stop(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*StopResponse, error)
 	Clear(ctx context.Context, in *ClearRequest, opts ...grpc.CallOption) (*ClearResponse, error)
 }
@@ -35,15 +34,6 @@ func NewDecryptClient(cc grpc.ClientConnInterface) DecryptClient {
 func (c *decryptClient) Start(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error) {
 	out := new(StartResponse)
 	err := c.cc.Invoke(ctx, "/Decrypt/Start", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *decryptClient) Validate(ctx context.Context, in *ValidateRequest, opts ...grpc.CallOption) (*ValidateResponse, error) {
-	out := new(ValidateResponse)
-	err := c.cc.Invoke(ctx, "/Decrypt/Validate", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +63,6 @@ func (c *decryptClient) Clear(ctx context.Context, in *ClearRequest, opts ...grp
 // for forward compatibility
 type DecryptServer interface {
 	Start(context.Context, *StartRequest) (*StartResponse, error)
-	Validate(context.Context, *ValidateRequest) (*ValidateResponse, error)
 	Stop(context.Context, *StopRequest) (*StopResponse, error)
 	Clear(context.Context, *ClearRequest) (*ClearResponse, error)
 }
@@ -84,9 +73,6 @@ type UnimplementedDecryptServer struct {
 
 func (UnimplementedDecryptServer) Start(context.Context, *StartRequest) (*StartResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
-}
-func (UnimplementedDecryptServer) Validate(context.Context, *ValidateRequest) (*ValidateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Validate not implemented")
 }
 func (UnimplementedDecryptServer) Stop(context.Context, *StopRequest) (*StopResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Stop not implemented")
@@ -120,24 +106,6 @@ func _Decrypt_Start_Handler(srv interface{}, ctx context.Context, dec func(inter
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DecryptServer).Start(ctx, req.(*StartRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Decrypt_Validate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ValidateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DecryptServer).Validate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/Decrypt/Validate",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DecryptServer).Validate(ctx, req.(*ValidateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -188,10 +156,6 @@ var Decrypt_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Start",
 			Handler:    _Decrypt_Start_Handler,
-		},
-		{
-			MethodName: "Validate",
-			Handler:    _Decrypt_Validate_Handler,
 		},
 		{
 			MethodName: "Stop",

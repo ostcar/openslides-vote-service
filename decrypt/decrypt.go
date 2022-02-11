@@ -2,291 +2,231 @@ package decrypt
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"math/rand"
+	"io"
+	"math"
+	"math/big"
+	"runtime"
+	"sync"
 )
 
 // Decrypt holds the internal state of the decrypt component.
 type Decrypt struct {
-	crypto   Crypto
-	auditlog Auditlog
-	store    Store
+	crypto Crypto
+	store  Store
+
+	maxVotes       int
+	decryptWorkers int
+	random         io.Reader
 }
 
 // New returns the initialized decrypt component.
-func New(crypto Crypto, auditlog Auditlog, store Store) *Decrypt {
-	return &Decrypt{
-		crypto:   crypto,
-		auditlog: auditlog,
-		store:    store,
+func New(crypto Crypto, store Store, options ...Option) *Decrypt {
+	d := Decrypt{
+		crypto:         crypto,
+		store:          store,
+		decryptWorkers: runtime.GOMAXPROCS(-1),
+		random:         rand.Reader,
+		maxVotes:       math.MaxInt,
 	}
+
+	for _, o := range options {
+		o(&d)
+	}
+
+	return &d
 }
 
 // Start starts the poll with specific data.
 //
 // It saves the poll meta data and generates a cryptographic key and returns the
 // public key.
-func (d *Decrypt) Start(ctx context.Context, id string, meta PollMeta) (pubKey []byte, err error) {
-	var pd pollData
-	oldData, err := d.store.Load(id)
+func (d *Decrypt) Start(ctx context.Context, pollID string) (pubKey []byte, pubKeySig []byte, err error) {
+	pollKey, err := d.store.LoadKey(pollID)
 	if err != nil {
-		return nil, fmt.Errorf("loading poll data: %w", err)
+		return nil, nil, fmt.Errorf("loading poll key: %w", err)
 	}
 
-	if oldData != nil {
-		if err := json.Unmarshal(oldData, &pd); err != nil {
-			return nil, fmt.Errorf("decoding poll data: %w", err)
-		}
-
-	} else {
-		key, err := d.crypto.CreateKey()
+	if pollKey == nil {
+		key, err := d.crypto.CreatePollKey()
 		if err != nil {
-			return nil, fmt.Errorf("creating poll key: %w", err)
+			return nil, nil, fmt.Errorf("creating poll key: %w", err)
 		}
+		pollKey = key
 
-		pd.Key = key
-		pd.Meta = meta
-
-		data, err := json.Marshal(pd)
-		if err != nil {
-			return nil, fmt.Errorf("decoding poll data: %w", err)
-		}
-
-		if err := d.store.Save(id, data); err != nil {
-			return nil, fmt.Errorf("saving data: %w", err)
+		if err := d.store.SaveKey(pollID, key); err != nil {
+			return nil, nil, fmt.Errorf("saving poll key: %w", err)
 		}
 	}
 
-	pubKey, err = d.crypto.SignedPubKey([]byte(pd.Key))
+	pubKey, pubKeySig, err = d.crypto.PublicPollKey(pollKey)
 	if err != nil {
-		return nil, fmt.Errorf("signing pub key: %w", err)
+		return nil, nil, fmt.Errorf("signing pub key: %w", err)
 	}
 
-	return pubKey, nil
-}
-
-// Validate decryptes the given vote and returns true, if it is valid.
-func (d *Decrypt) Validate(ctx context.Context, id string, vote []byte, meta VoteMeta) (bool, error) {
-	var pd pollData
-	storeData, err := d.store.Load(id)
-	if err != nil {
-		return false, fmt.Errorf("loading poll data: %w", err)
-	}
-
-	if storeData == nil {
-		return false, fmt.Errorf("unknown poll %s", id)
-	}
-
-	if err := json.Unmarshal(storeData, &pd); err != nil {
-		return false, fmt.Errorf("decoding poll data: %w", err)
-	}
-
-	plaintext, err := d.crypto.Decrypt(pd.Key, vote)
-	if err != nil {
-		return false, fmt.Errorf("decrypting poll: %w", err)
-	}
-
-	var b ballot
-	if err := json.Unmarshal(plaintext, &b); err != nil {
-		return false, fmt.Errorf("decoding ballot: %w", err)
-	}
-
-	// TODO: all validation has to be in constant time.
-	valid, err := validate(pd.Meta, b.Votes)
-	if err != nil {
-		return false, fmt.Errorf("validate vote: %w", err)
-	}
-
-	if b.PollID != id {
-		return false, nil
-	}
-
-	if b.Weight != meta.Weight {
-		return false, nil
-	}
-
-	if b.UserID != 0 {
-		return false, nil
-	}
-
-	return valid, nil
+	return pubKey, pubKeySig, nil
 }
 
 // Stop takes a list of ecrypted votes, decryptes them and returns them in a
-// random order.
-func (d *Decrypt) Stop(ctx context.Context, id string, voteList [][]byte) (decryptedVoteList, signature []byte, err error) {
-	var pd pollData
-	storeData, err := d.store.Load(id)
+// random order together with a signature.
+func (d *Decrypt) Stop(ctx context.Context, pollID string, voteList [][]byte) (decryptedContent, signature []byte, err error) {
+	pollKey, err := d.store.LoadKey(pollID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("loading poll data: %w", err)
+		return nil, nil, fmt.Errorf("loading poll key: %w", err)
 	}
 
-	if storeData == nil {
-		return nil, nil, fmt.Errorf("unknown poll %s", id)
+	if pollKey == nil {
+		return nil, nil, fmt.Errorf("unknown poll")
 	}
 
-	if err := json.Unmarshal(storeData, &pd); err != nil {
-		return nil, nil, fmt.Errorf("decoding poll data: %w", err)
+	if len(voteList) > d.maxVotes {
+		return nil, nil, fmt.Errorf("received %d votes, only %d votes supported", len(voteList), d.maxVotes)
 	}
 
-	decrypted := make([]json.RawMessage, len(voteList))
-	for i, vote := range voteList {
-		plain, err := d.crypto.Decrypt(pd.Key, vote)
-		if err != nil {
-			return nil, nil, fmt.Errorf("decrypting vote: %w", err)
-		}
-		decrypted[i] = plain
+	decrypted, err := d.decryptVotes(ctx, pollKey, voteList)
+	if err != nil {
+		return nil, nil, fmt.Errorf("decrypting votes: %w", err)
 	}
-
-	// TODO: use crypt/rand
-	rand.Shuffle(len(decrypted), func(i, j int) {
-		decrypted[i], decrypted[j] = decrypted[j], decrypted[i]
-	})
 
 	content := struct {
-		Meta  PollMeta          `json:"meta"`
+		ID    string            `json:"id"`
 		Votes []json.RawMessage `json:"votes"`
 	}{
-		pd.Meta,
+		pollID,
 		decrypted,
 	}
 
-	decryptedVoteList, err = json.Marshal(content)
+	decryptedContent, err = json.Marshal(content)
 	if err != nil {
-		return nil, nil, fmt.Errorf("encoding content: %w", err)
+		return nil, nil, fmt.Errorf("marshal decrypted content: %w", err)
 	}
 
-	signature, err = d.crypto.Sign(decryptedVoteList)
+	signature, err = d.crypto.Sign(decryptedContent)
 	if err != nil {
-		return nil, nil, fmt.Errorf("siging votes: %w", err)
+		return nil, nil, fmt.Errorf("signing votes")
 	}
 
-	return decryptedVoteList, signature, nil
-}
-
-// Clear stops a poll by removing the generated cryptographic key. After this
-// call, it is impossible to call Verify or Stop.
-func (d *Decrypt) Clear(ctx context.Context, id string) (auditlog, signatrue []byte, err error) {
-	return nil, nil, errors.New("TODO")
-}
-
-// PollMeta contains all settings of a poll needed to validate the votes.
-type PollMeta struct {
-	Method        string `json:"method"`
-	GlobalYes     bool   `json:"global_yes"`
-	GlobalNo      bool   `json:"global_no"`
-	GlobalAbstain bool   `json:"global_abstain"` // TEST ME
-	Options       string `json:"options"`        // TODO: use better value that is comparable but returns to []int
-	MaxAmount     int    `json:"max_amount"`
-	MinAmount     int    `json:"min_amount"`
-}
-
-// VoteMeta contains all data specific to a vote from the OpenSlides stack, that
-// is needed from the decrypt service to validate the vote.
-type VoteMeta struct {
-	Weight string `json:"weight"`
-}
-
-// pollData is the format stored in the storage.
-type pollData struct {
-	Key  []byte   `json:"key"`
-	Meta PollMeta `json:"meta"`
-}
-
-type ballot struct {
-	Votes  voteValue `json:"votes"`
-	Weight string    `json:"weight"`
-	PollID string    `json:"poll_id"`
-	UserID int       `json:"user_id"`
-}
-
-// voteValue is the attribute "votes" from the user vote.
-type voteValue struct {
-	str          string
-	optionAmount map[int]int
-	optionYNA    map[int]string
-}
-
-func (v *voteValue) UnmarshalJSON(b []byte) error {
-	if err := json.Unmarshal(b, &v.str); err == nil {
-		// voteData is a string
-		return nil
+	if err := d.store.ValidateSignature(pollID, signature); err != nil {
+		return nil, nil, fmt.Errorf("validate signature: %w", err)
 	}
 
-	if err := json.Unmarshal(b, &v.optionAmount); err == nil {
-		// voteData is option_id to amount
-		return nil
-	}
-	v.optionAmount = nil
-
-	if err := json.Unmarshal(b, &v.optionYNA); err == nil {
-		// voteData is option_id to string
-		return nil
-	}
-
-	return fmt.Errorf("unknown vote value: `%s`", b)
+	return decryptedContent, signature, nil
 }
 
-const (
-	ballotValueUnknown = iota
-	ballotValueString
-	ballotValueOptionAmount
-	ballotValueOptionString
-)
-
-func (v *voteValue) Type() int {
-	if v.str != "" {
-		return ballotValueString
+// Clear stops a poll by removing the generated cryptographic key.
+func (d *Decrypt) Clear(ctx context.Context, pollID string) error {
+	if err := d.store.Clear(pollID); err != nil {
+		return fmt.Errorf("clearing poll from store: %w", err)
 	}
-
-	if v.optionAmount != nil {
-		return ballotValueOptionAmount
-	}
-
-	if v.optionYNA != nil {
-		return ballotValueOptionString
-	}
-
-	return ballotValueUnknown
+	return nil
 }
 
-// Auditlog saves and loads the audotmessages.
-type Auditlog interface {
-	// Log saves a log message.
-	Log(ctx context.Context, id string, event string, payload interface{}) error
+func randInt(source io.Reader, n int) (int, error) {
+	if n == 0 {
+		return 0, nil
+	}
 
-	// Load loads all log messages for one poll.
-	Load(ctx context.Context, id string) ([]string, error)
+	r, err := rand.Int(source, big.NewInt(int64(n)))
+	if err != nil {
+		return 0, fmt.Errorf("getting random number from rand.Int: %w", err)
+	}
+
+	return int(r.Int64()), nil
+}
+
+func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byte) ([]json.RawMessage, error) {
+	// TODO: Listen on ctx.Done()
+
+	// Read votes from voteList in random order.
+	voteChan := make(chan []byte, 1)
+	go func() {
+		defer close(voteChan)
+
+		n := len(voteList)
+		for n > 0 {
+			i, err := randInt(d.random, n-1)
+			if err != nil {
+				// TODO: handle error
+			}
+
+			voteChan <- voteList[i]
+			voteList[i] = voteList[n-1]
+			n--
+		}
+	}()
+
+	// decrypt votes in parallel
+	var wg sync.WaitGroup
+	wg.Add(d.decryptWorkers)
+	decryptedChan := make(chan []byte, 1)
+	for i := 0; i < d.decryptWorkers; i++ {
+		go func() {
+			defer wg.Done()
+			for vote := range voteChan {
+				decrypted, err := d.crypto.Decrypt(key, vote)
+				if err != nil {
+					// TODO: Handle error
+				}
+
+				// TODO:Check poll ID
+				decryptedChan <- decrypted
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(decryptedChan)
+	}()
+
+	// Bundle decrypted votes.
+	decryptedList := make([]json.RawMessage, len(voteList))
+	var i int
+	for decrypted := range decryptedChan {
+		decryptedList[i] = decrypted
+		i++
+	}
+	return decryptedList, nil
 }
 
 // Crypto implements all required cryptographic functions.
 type Crypto interface {
-	// CreateKey creates a new keypair. Returns the public and privat key and a
-	// signature for the public key.
-	CreateKey() ([]byte, error)
+	// PublicMainKey returns the public main key and the signature of the key.
+	PublicMainKey(key []byte) (pubKey []byte, err error)
 
-	// SingedPubKey returns a signed public key.
-	SignedPubKey(key []byte) ([]byte, error)
+	// CreatePollKey creates a new keypair for a poll.
+	CreatePollKey() (key []byte, err error)
+
+	// PublicPollKey returns the public poll key and the signature for a given key.
+	PublicPollKey(key []byte) (pubKey []byte, pubKeySig []byte, err error)
 
 	// Decrypt returned the plaintext from value using the key.
 	Decrypt(key []byte, value []byte) ([]byte, error)
 
-	// Sign data.
+	// Returns the signature for the given data.
 	Sign(value []byte) ([]byte, error)
 }
 
 // Store saves the data, that have to be persistend.
-//
-// The
 type Store interface {
-	// Save saves the data for one poll.
-	Save(id string, data []byte) error
+	// SaveKey stores the private key.
+	//
+	// Has to return an error, if a key already exists.
+	SaveKey(id string, key []byte) error
 
-	// Load gets the data for one poll.
-	Load(id string) ([]byte, error)
+	// LoadKey returns the private key from the store.
+	//
+	// If the poll is unknown return (nil, nil)
+	LoadKey(id string) (key []byte, err error)
 
-	// Delete removes the data for one poll.
-	Delete(id string) error
+	// ValidateSignature makes sure, that no other signature is saved for a
+	// poll. Saves the signature for future calls.
+	//
+	// Has to return an error if the id is unknown in the store.
+	ValidateSignature(id string, hash []byte) error
+
+	// Clear removes all data for the poll.
+	Clear(id string) error
 }

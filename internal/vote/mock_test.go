@@ -6,8 +6,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/OpenSlides/openslides-vote-service/decrypt"
 )
 
 type StubGetter struct {
@@ -92,15 +90,13 @@ func (m *StubMessageBus) Read(timeout time.Duration) ([2]string, error) {
 
 type decrypterStub struct{}
 
-func (d *decrypterStub) Start(ctx context.Context, id string, meta decrypt.PollMeta) (pubKey []byte, err error) {
-	return nil, nil
-}
-func (d *decrypterStub) Validate(ctx context.Context, id string, vote []byte, meta decrypt.VoteMeta) (bool, error) {
-	return false, nil
-}
-func (d *decrypterStub) Stop(ctx context.Context, id string, voteList [][]byte) (decryptedVoteList, signature []byte, err error) {
+func (d *decrypterStub) Start(ctx context.Context, pollID string) (pubKey []byte, pubKeySig []byte, err error) {
 	return nil, nil, nil
 }
-func (d *decrypterStub) Clear(ctx context.Context, id string) (auditlog, signatrue []byte, err error) {
+
+func (d *decrypterStub) Stop(ctx context.Context, pollID string, voteList [][]byte) (decryptedContent, signature []byte, err error) {
 	return nil, nil, nil
+}
+func (d *decrypterStub) Clear(ctx context.Context, pollID string) error {
+	return nil
 }
