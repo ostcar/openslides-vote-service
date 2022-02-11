@@ -19,7 +19,7 @@ const (
 )
 
 type starter interface {
-	Start(ctx context.Context, pollID int) ([]byte, error)
+	Start(ctx context.Context, pollID int) ([]byte, []byte, error)
 }
 
 func handleStart(mux *http.ServeMux, start starter) {
@@ -40,16 +40,18 @@ func handleStart(mux *http.ServeMux, start starter) {
 				return
 			}
 
-			pubkey, err := start.Start(r.Context(), id)
+			pubkey, pubKeySig, err := start.Start(r.Context(), id)
 			if err != nil {
 				handleError(w, err, true)
 				return
 			}
 
 			content := struct {
-				PubKey string `json:"public_key"`
+				PubKey    []byte `json:"public_key"`
+				PubKeySig []byte `json:"public_key_sig"`
 			}{
-				string(pubkey),
+				pubkey,
+				pubKeySig,
 			}
 			if err := json.NewEncoder(w).Encode(content); err != nil {
 				http.Error(w, MessageError{ErrInternal, err.Error()}.Error(), 500)

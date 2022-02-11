@@ -73,7 +73,7 @@ func (s *StoreMock) ValidateSignature(id string, signature []byte) error {
 }
 
 // Clear removes all data for the poll.
-func (s *StoreMock) Clear(id string) error {
+func (s *StoreMock) ClearPoll(id string) error {
 	delete(s.keys, id)
 	delete(s.signatures, id)
 	return nil

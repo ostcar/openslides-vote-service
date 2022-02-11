@@ -6,11 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
-	"strings"
 
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/datastore"
-	"github.com/OpenSlides/openslides-vote-service/decrypt"
 	"github.com/OpenSlides/openslides-vote-service/internal/log"
 )
 
@@ -139,21 +136,19 @@ func (v *Vote) Stop(ctx context.Context, pollID int, w io.Writer) (err error) {
 		return fmt.Errorf("fetching vote objects: %w", err)
 	}
 
-	// Convert vote objects to json.RawMessage
-	encodableObjects := make([]json.RawMessage, len(objects))
-	for i := range objects {
-		encodableObjects[i] = objects[i]
-	}
+	decrypted, signature, err := v.decrypter.Stop(ctx, v.qualifiedID(pollID), objects)
 
 	if userIDs == nil {
 		userIDs = []int{}
 	}
 
 	out := struct {
-		Votes []json.RawMessage `json:"votes"`
-		Users []int             `json:"user_ids"`
+		Votes     json.RawMessage `json:"votes"`
+		Signature []byte          `json:"signature"`
+		Users     []int           `json:"user_ids"`
 	}{
-		encodableObjects,
+		decrypted,
+		signature,
 		userIDs,
 	}
 
@@ -181,6 +176,10 @@ func (v *Vote) Clear(ctx context.Context, pollID int) (err error) {
 
 	if err := v.counter.CountClear(ctx, pollID); err != nil {
 		return fmt.Errorf("clearing counter: %w", err)
+	}
+
+	if err := v.decrypter.Clear(ctx, v.qualifiedID(pollID)); err != nil {
+		return fmt.Errorf("clearing decrypter: %w", err)
 	}
 	return nil
 }
@@ -211,6 +210,9 @@ func (v *Vote) ClearAll(ctx context.Context) (err error) {
 	if err := v.counter.ClearAll(ctx); err != nil {
 		return fmt.Errorf("clearing all counter: %w", err)
 	}
+
+	// TODO: clear decrypter.
+
 	return nil
 }
 
@@ -251,10 +253,6 @@ func (v *Vote) Vote(ctx context.Context, pollID, requestUser int, r io.Reader) (
 		return MessageError{ErrNotAllowed, "Votes for anonymous user are not allowed"}
 	}
 
-	if err := vote.validate(poll); err != nil {
-		return fmt.Errorf("validating vote: %w", err)
-	}
-
 	backend := v.backend(poll)
 
 	if voteUser != requestUser {
@@ -284,6 +282,7 @@ func (v *Vote) Vote(ctx context.Context, pollID, requestUser int, r io.Reader) (
 	}
 
 	// voteData.Weight is a DecimalField with 6 zeros.
+	// TODO: Disable vote weight on crypted votes
 	var voteWeight string
 	if ds.Meeting_UsersEnableVoteWeight(poll.meetingID).ErrorLater(ctx) {
 		voteWeight = ds.User_VoteWeight(voteUser, poll.meetingID).ErrorLater(ctx)
@@ -585,23 +584,6 @@ func (p pollConfig) preload(ctx context.Context, ds *datastore.Request) error {
 		return fmt.Errorf("preloading delegated users: %w", err)
 	}
 	return nil
-}
-
-func (p pollConfig) meta() decrypt.PollMeta {
-	options := make([]string, len(p.options))
-	for i, o := range p.options {
-		options[i] = strconv.Itoa(o)
-	}
-
-	return decrypt.PollMeta{
-		Method:        p.method,
-		GlobalYes:     p.globalYes,
-		GlobalNo:      p.globalNo,
-		GlobalAbstain: p.globalAbstain,
-		Options:       strings.Join(options, ","),
-		MaxAmount:     p.maxAmount,
-		MinAmount:     p.minAmount,
-	}
 }
 
 type maybeInt struct {

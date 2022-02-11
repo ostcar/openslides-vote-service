@@ -117,7 +117,7 @@ func (d *Decrypt) Stop(ctx context.Context, pollID string, voteList [][]byte) (d
 
 // Clear stops a poll by removing the generated cryptographic key.
 func (d *Decrypt) Clear(ctx context.Context, pollID string) error {
-	if err := d.store.Clear(pollID); err != nil {
+	if err := d.store.ClearPoll(pollID); err != nil {
 		return fmt.Errorf("clearing poll from store: %w", err)
 	}
 	return nil
@@ -227,6 +227,6 @@ type Store interface {
 	// Has to return an error if the id is unknown in the store.
 	ValidateSignature(id string, hash []byte) error
 
-	// Clear removes all data for the poll.
-	Clear(id string) error
+	// ClearPoll removes all data for the poll.
+	ClearPoll(id string) error
 }

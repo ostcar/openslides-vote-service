@@ -33,7 +33,7 @@ func TestVoteStart(t *testing.T) {
 
 		v, _ := vote.New(backend, backend, ds, vote.NewMockCounter(), new(decrypterStub))
 
-		if _, err := v.Start(context.Background(), 1); err != nil {
+		if _, _, err := v.Start(context.Background(), 1); err != nil {
 			t.Errorf("Start returned unexpected error: %v", err)
 		}
 
@@ -64,7 +64,7 @@ func TestVoteStart(t *testing.T) {
 		v, _ := vote.New(backend, backend, &ds, vote.NewMockCounter(), new(decrypterStub))
 		v.Start(context.Background(), 1)
 
-		if _, err := v.Start(context.Background(), 1); err != nil {
+		if _, _, err := v.Start(context.Background(), 1); err != nil {
 			t.Errorf("Start returned unexpected error: %v", err)
 		}
 	})
@@ -89,7 +89,7 @@ func TestVoteStart(t *testing.T) {
 			t.Fatalf("Stop returned unexpected error: %v", err)
 		}
 
-		if _, err := v.Start(context.Background(), 1); err != nil {
+		if _, _, err := v.Start(context.Background(), 1); err != nil {
 			t.Errorf("Start returned unexpected error: %v", err)
 		}
 	})
@@ -108,7 +108,7 @@ func TestVoteStart(t *testing.T) {
 		`)}
 		v, _ := vote.New(backend, backend, &ds, vote.NewMockCounter(), new(decrypterStub))
 
-		_, err := v.Start(context.Background(), 1)
+		_, _, err := v.Start(context.Background(), 1)
 
 		if err == nil {
 			t.Errorf("Got no error, expected `Some error`")
@@ -129,7 +129,7 @@ func TestVoteStart(t *testing.T) {
 		`)}
 		v, _ := vote.New(backend, backend, &ds, vote.NewMockCounter(), new(decrypterStub))
 
-		_, err := v.Start(context.Background(), 1)
+		_, _, err := v.Start(context.Background(), 1)
 
 		if err == nil {
 			t.Errorf("Got no error, expected `Some error`")
@@ -150,7 +150,7 @@ func TestVoteStart(t *testing.T) {
 		`)}
 		v, _ := vote.New(backend, backend, &ds, vote.NewMockCounter(), new(decrypterStub))
 
-		_, err := v.Start(context.Background(), 1)
+		_, _, err := v.Start(context.Background(), 1)
 
 		if err == nil {
 			t.Errorf("Got no error, expected `Some error`")
@@ -171,7 +171,7 @@ func TestVoteStart(t *testing.T) {
 		`)}
 		v, _ := vote.New(backend, backend, &ds, vote.NewMockCounter(), new(decrypterStub))
 
-		_, err := v.Start(context.Background(), 1)
+		_, _, err := v.Start(context.Background(), 1)
 
 		if err == nil {
 			t.Errorf("Got no error, expected `Some error`")
@@ -202,7 +202,7 @@ func TestVoteStartPreloadData(t *testing.T) {
 	`))
 	v, _ := vote.New(backend, backend, ds, vote.NewMockCounter(), new(decrypterStub))
 
-	if _, err := v.Start(context.Background(), 1); err != nil {
+	if _, _, err := v.Start(context.Background(), 1); err != nil {
 		t.Errorf("Start returned unexpected error: %v", err)
 	}
 
@@ -215,7 +215,7 @@ func TestVoteStartDSError(t *testing.T) {
 	backend := memory.New()
 	ds := StubGetter{err: errors.New("Some error")}
 	v, _ := vote.New(backend, backend, &ds, vote.NewMockCounter(), new(decrypterStub))
-	_, err := v.Start(context.Background(), 1)
+	_, _, err := v.Start(context.Background(), 1)
 
 	if err == nil {
 		t.Errorf("Got no error, expected `Some error`")
@@ -500,7 +500,7 @@ func TestVoteNoRequests(t *testing.T) {
 			backend := memory.New()
 			v, _ := vote.New(backend, backend, ds, vote.NewMockCounter(), new(decrypterStub))
 
-			if _, err := v.Start(context.Background(), 1); err != nil {
+			if _, _, err := v.Start(context.Background(), 1); err != nil {
 				t.Fatalf("Can not start poll: %v", err)
 			}
 

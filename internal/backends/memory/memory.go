@@ -18,14 +18,19 @@ type Backend struct {
 	voted   map[int]map[int]bool
 	objects map[int][][]byte
 	state   map[int]int
+
+	pollKey       map[string][]byte
+	pollSignature map[string][]byte
 }
 
 // New initializes a new memory.Backend.
 func New() *Backend {
 	b := Backend{
-		voted:   make(map[int]map[int]bool),
-		objects: make(map[int][][]byte),
-		state:   make(map[int]int),
+		voted:         make(map[int]map[int]bool),
+		objects:       make(map[int][][]byte),
+		state:         make(map[int]int),
+		pollKey:       make(map[string][]byte),
+		pollSignature: make(map[string][]byte),
 	}
 	return &b
 }
@@ -136,6 +141,41 @@ func (b *Backend) AssertUserHasVoted(t *testing.T, pollID, userID int) {
 	if !b.voted[pollID][userID] {
 		t.Errorf("User %d has not voted", userID)
 	}
+}
+
+// SaveKey saves a poll key.
+func (b *Backend) SaveKey(id string, key []byte) error {
+	b.pollKey[id] = key
+	return nil
+}
+
+// LoadKey returns the private key from the store.
+//
+// If the poll is unknown return (nil, nil)
+func (b *Backend) LoadKey(id string) (key []byte, err error) {
+	return b.pollKey[id], nil
+}
+
+// ValidateSignature makes sure, that no other signature is saved for a
+// poll. Saves the signature for future calls.
+//
+// Has to return an error if the id is unknown in the store.
+func (b *Backend) ValidateSignature(id string, hash []byte) error {
+	if b.pollSignature[id] == nil {
+		b.pollSignature[id] = hash
+		return nil
+	}
+	if string(hash) != string(b.pollSignature[id]) {
+		return fmt.Errorf("%s != %s", hash, b.pollSignature[id])
+	}
+	return nil
+}
+
+// ClearPoll removes all data for the poll.
+func (b *Backend) ClearPoll(id string) error {
+	delete(b.pollKey, id)
+	delete(b.pollSignature, id)
+	return nil
 }
 
 type doesNotExistError struct {

@@ -2,6 +2,7 @@ package vote
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/datastore"
 	messageBusRedis "github.com/OpenSlides/openslides-autoupdate-service/pkg/redis"
 	"github.com/OpenSlides/openslides-vote-service/decrypt"
+	"github.com/OpenSlides/openslides-vote-service/decrypt/crypto"
 	"github.com/OpenSlides/openslides-vote-service/internal/backends/memory"
 	"github.com/OpenSlides/openslides-vote-service/internal/backends/postgres"
 	"github.com/OpenSlides/openslides-vote-service/internal/backends/redis"
@@ -55,8 +57,9 @@ func Run(ctx context.Context, environment []string, getSecret func(name string) 
 	}
 
 	// TODO: also use grpc backend
-	// TODO: inizialize dependencies
-	decrypter := decrypt.New(nil, nil, nil)
+	memory := memory.New() // TODO: always the same backend? probably postgres?
+	cry := crypto.New([]byte("mainKey"), rand.Reader)
+	decrypter := decrypt.New(cry, memory)
 
 	service, err := New(fastBackend, longBackend, ds, counter, decrypter)
 	if err != nil {

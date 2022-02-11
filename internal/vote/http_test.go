@@ -14,13 +14,14 @@ import (
 type StarterStub struct {
 	id int
 
-	expectPubKey []byte
-	expectErr    error
+	expectPubKey    []byte
+	expectPubKeySig []byte
+	expectErr       error
 }
 
-func (c *StarterStub) Start(ctx context.Context, pollID int) ([]byte, error) {
+func (c *StarterStub) Start(ctx context.Context, pollID int) ([]byte, []byte, error) {
 	c.id = pollID
-	return c.expectPubKey, c.expectErr
+	return c.expectPubKey, c.expectPubKeySig, c.expectErr
 }
 
 func TestHandleStart(t *testing.T) {
