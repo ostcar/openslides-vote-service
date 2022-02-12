@@ -1,4 +1,4 @@
-package vote
+package run
 
 import (
 	"context"
@@ -12,11 +12,12 @@ import (
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/auth"
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/datastore"
 	messageBusRedis "github.com/OpenSlides/openslides-autoupdate-service/pkg/redis"
+	"github.com/OpenSlides/openslides-vote-service/backends/memory"
+	"github.com/OpenSlides/openslides-vote-service/backends/postgres"
+	"github.com/OpenSlides/openslides-vote-service/backends/redis"
+	"github.com/OpenSlides/openslides-vote-service/collect"
 	"github.com/OpenSlides/openslides-vote-service/decrypt"
 	"github.com/OpenSlides/openslides-vote-service/decrypt/crypto"
-	"github.com/OpenSlides/openslides-vote-service/internal/backends/memory"
-	"github.com/OpenSlides/openslides-vote-service/internal/backends/postgres"
-	"github.com/OpenSlides/openslides-vote-service/internal/backends/redis"
 	"github.com/OpenSlides/openslides-vote-service/internal/log"
 )
 
@@ -61,20 +62,13 @@ func Run(ctx context.Context, environment []string, getSecret func(name string) 
 	cry := crypto.New([]byte("mainKey"), rand.Reader)
 	decrypter := decrypt.New(cry, memory)
 
-	service, err := New(fastBackend, longBackend, ds, counter, decrypter)
+	service, err := collect.New(fastBackend, longBackend, ds, counter, decrypter)
 	if err != nil {
 		return fmt.Errorf("creating vote service: %w", err)
 	}
 
 	mux := http.NewServeMux()
-	handleStart(mux, service)
-	handleStop(mux, service)
-	handleClear(mux, service)
-	handleClearAll(mux, service)
-	handleVote(mux, service, auth)
-	handleVoted(mux, service, auth)
-	handleVoteCount(mux, service)
-	handleHealth(mux)
+	collect.RegisterHandler(mux, service, auth)
 
 	listenAddr := ":" + env["VOTE_PORT"]
 	srv := &http.Server{Addr: listenAddr, Handler: mux}
@@ -204,7 +198,7 @@ func buildAuth(
 	messageBus auth.LogoutEventer,
 	errHandler func(error),
 	getSecret func(name string) (string, error),
-) (authenticater, error) {
+) (collect.Authenticater, error) {
 	method := env["AUTH"]
 	switch method {
 	case "ticket":
@@ -338,11 +332,11 @@ func buildBackends(
 	ctx context.Context,
 	env map[string]string,
 	getSecret func(name string) (string, error),
-) (fast Backend, long Backend, counter Counter, err error) {
+) (fast collect.Backend, long collect.Backend, counter collect.Counter, err error) {
 	var rb *redis.Backend
 	var pb *postgres.Backend
 
-	setBackend := func(name string) (Backend, error) {
+	setBackend := func(name string) (collect.Backend, error) {
 		switch name {
 		case "memory":
 			return memory.New(), nil
@@ -379,7 +373,7 @@ func buildBackends(
 
 	counter = rb
 	if rb == nil {
-		counter = NewMockCounter()
+		counter = collect.NewMockCounter()
 	}
 	return fast, long, counter, nil
 }

@@ -1,4 +1,4 @@
-package vote
+package collect
 
 import (
 	"encoding/json"

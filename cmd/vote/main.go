@@ -9,8 +9,8 @@ import (
 	"os/signal"
 	"strconv"
 
+	"github.com/OpenSlides/openslides-vote-service/collect/run"
 	"github.com/OpenSlides/openslides-vote-service/internal/log"
-	"github.com/OpenSlides/openslides-vote-service/internal/vote"
 )
 
 func main() {
@@ -22,7 +22,7 @@ func main() {
 		log.SetDebugLogger(golog.New(os.Stderr, "DEBUG ", golog.LstdFlags))
 	}
 
-	if err := vote.Run(ctx, os.Environ(), secret); err != nil {
+	if err := run.Run(ctx, os.Environ(), secret); err != nil {
 		log.Info("Error: %v", err)
 	}
 }

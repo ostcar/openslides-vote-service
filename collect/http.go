@@ -1,4 +1,4 @@
-package vote
+package collect
 
 import (
 	"context"
@@ -17,6 +17,24 @@ const (
 	httpPathInternal = "/internal/vote"
 	httpPathExternal = "/system/vote"
 )
+
+// Authenticater is used to find out the user id for a request
+type Authenticater interface {
+	Authenticate(http.ResponseWriter, *http.Request) (context.Context, error)
+	FromContext(context.Context) int
+}
+
+// RegisterHandler adds all handlers to a http.ServeMux
+func RegisterHandler(mux *http.ServeMux, service *Vote, auth Authenticater) {
+	handleStart(mux, service)
+	handleStop(mux, service)
+	handleClear(mux, service)
+	handleClearAll(mux, service)
+	handleVote(mux, service, auth)
+	handleVoted(mux, service, auth)
+	handleVoteCount(mux, service)
+	handleHealth(mux)
+}
 
 type starter interface {
 	Start(ctx context.Context, pollID int) ([]byte, []byte, error)
@@ -151,12 +169,7 @@ type voter interface {
 	Vote(ctx context.Context, pollID, requestUser int, r io.Reader) error
 }
 
-type authenticater interface {
-	Authenticate(http.ResponseWriter, *http.Request) (context.Context, error)
-	FromContext(context.Context) int
-}
-
-func handleVote(mux *http.ServeMux, vote voter, auth authenticater) {
+func handleVote(mux *http.ServeMux, vote voter, auth Authenticater) {
 	mux.HandleFunc(
 		httpPathExternal,
 		func(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +211,7 @@ type votedPollser interface {
 	VotedPolls(ctx context.Context, pollIDs []int, requestUser int, w io.Writer) error
 }
 
-func handleVoted(mux *http.ServeMux, voted votedPollser, auth authenticater) {
+func handleVoted(mux *http.ServeMux, voted votedPollser, auth Authenticater) {
 	mux.HandleFunc(
 		httpPathExternal+"/voted",
 		func(w http.ResponseWriter, r *http.Request) {

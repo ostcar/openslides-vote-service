@@ -1,18 +1,17 @@
-package vote_test
+package run_test
 
 import (
 	"bytes"
 	"context"
 	goLogger "log"
 	"net"
-	"net/http"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/OpenSlides/openslides-vote-service/collect/run"
 	"github.com/OpenSlides/openslides-vote-service/internal/log"
-	"github.com/OpenSlides/openslides-vote-service/internal/vote"
 )
 
 func waitForServer(t *testing.T, addr string) {
@@ -37,7 +36,7 @@ func TestRun(t *testing.T) {
 
 	t.Run("Start Server with given port", func(t *testing.T) {
 		go func() {
-			err := vote.Run(ctx, []string{"VOTE_BACKEND_FAST=memory", "VOTE_BACKEND_LONG=memory", "VOTE_PORT=5000"}, secret)
+			err := run.Run(ctx, []string{"VOTE_BACKEND_FAST=memory", "VOTE_BACKEND_LONG=memory", "VOTE_PORT=5000"}, secret)
 			if err != nil {
 				t.Errorf("Vote.Run retunred unexpected error: %v", err)
 			}
@@ -56,7 +55,7 @@ func TestRun(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			// Use an individuel port because the default port could be used by other tests.
-			runErr = vote.Run(ctx, []string{"VOTE_BACKEND_FAST=memory", "VOTE_BACKEND_LONG=memory", "VOTE_PORT=5001"}, secret)
+			runErr = run.Run(ctx, []string{"VOTE_BACKEND_FAST=memory", "VOTE_BACKEND_LONG=memory", "VOTE_PORT=5001"}, secret)
 			close(done)
 		}()
 
@@ -71,44 +70,6 @@ func TestRun(t *testing.T) {
 		case <-done:
 		case <-timer.C:
 			t.Errorf("Server did not stop")
-		}
-
-		if runErr != nil {
-			t.Errorf("Vote.Run retunred unexpected error: %v", runErr)
-		}
-	})
-
-	t.Run("Registered handlers", func(t *testing.T) {
-		var runErr error
-		go func() {
-			// Use an individuel port because the default port could be used by other tests.
-			runErr = vote.Run(ctx, []string{"VOTE_BACKEND_FAST=memory", "VOTE_BACKEND_LONG=memory", "VOTE_PORT=5002"}, secret)
-		}()
-
-		waitForServer(t, "localhost:5002")
-
-		baseUrl := "http://localhost:5002"
-
-		for _, path := range []string{
-			"/internal/vote/start",
-			"/internal/vote/stop",
-			"/internal/vote/clear",
-			"/internal/vote/clear_all",
-			"/internal/vote/vote_count",
-			"/system/vote",
-			"/system/vote/voted",
-			"/system/vote/health",
-		} {
-			t.Run(path, func(t *testing.T) {
-				resp, err := http.Get(baseUrl + path)
-				if err != nil {
-					t.Fatalf("Can not open connection: %v", err)
-				}
-
-				if resp.StatusCode == 404 {
-					t.Errorf("Got status %s", resp.Status)
-				}
-			})
 		}
 
 		if runErr != nil {
