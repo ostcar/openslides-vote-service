@@ -38,6 +38,9 @@ func (c Crypto) PublicPollKey(key []byte) (pubKey []byte, pubKeySig []byte, err 
 // Decrypt returned the plaintext from value using the key.
 func (c Crypto) Decrypt(key []byte, value []byte) ([]byte, error) {
 	prefix := []byte("enc:")
+	if !bytes.HasPrefix(value, prefix) {
+		return nil, fmt.Errorf("unincrypted vote: %s", value)
+	}
 	return bytes.TrimPrefix(value, prefix), nil
 }
 

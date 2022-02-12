@@ -149,6 +149,7 @@ func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byt
 			i, err := randInt(d.random, n-1)
 			if err != nil {
 				// TODO: handle error
+				panic(err)
 			}
 
 			voteChan <- voteList[i]
@@ -168,6 +169,7 @@ func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byt
 				decrypted, err := d.crypto.Decrypt(key, vote)
 				if err != nil {
 					// TODO: Handle error
+					decrypted = []byte(fmt.Sprintf("error decrypting: %v", err))
 				}
 
 				// TODO:Check poll ID

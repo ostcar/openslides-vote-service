@@ -126,7 +126,7 @@ func (v *Vote) Stop(ctx context.Context, pollID int, w io.Writer) (err error) {
 	}
 
 	backend := v.backend(poll)
-	objects, userIDs, err := backend.Stop(ctx, pollID)
+	rawBallots, userIDs, err := backend.Stop(ctx, pollID)
 	if err != nil {
 		var errNotExist interface{ DoesNotExist() }
 		if errors.As(err, &errNotExist) {
@@ -136,7 +136,20 @@ func (v *Vote) Stop(ctx context.Context, pollID int, w io.Writer) (err error) {
 		return fmt.Errorf("fetching vote objects: %w", err)
 	}
 
-	decrypted, signature, err := v.decrypter.Stop(ctx, v.qualifiedID(pollID), objects)
+	votes := make([][]byte, len(rawBallots))
+	for i := range rawBallots {
+		var b ballot
+		if err := json.Unmarshal(rawBallots[i], &b); err != nil {
+			return fmt.Errorf("decoding ballot from backend: %w", err)
+		}
+		// TODO: only decrypt values in hidden polls.
+		votes[i] = []byte(b.Value.str)
+	}
+
+	decrypted, signature, err := v.decrypter.Stop(ctx, v.qualifiedID(pollID), votes)
+	if err != nil {
+		return fmt.Errorf("decrypting votes: %w", err)
+	}
 
 	if userIDs == nil {
 		userIDs = []int{}
