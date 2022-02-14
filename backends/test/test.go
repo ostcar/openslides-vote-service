@@ -1,5 +1,5 @@
 // Package test impelemts a test suit to check if a backend implements all rules
-// of the vote.Backend interface.
+// of the collect.Backend interface.
 package test
 
 import (
@@ -10,11 +10,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/OpenSlides/openslides-vote-service/internal/vote"
+	"github.com/OpenSlides/openslides-vote-service/collect"
 )
 
-// Backend checks that a backend implements the vote.Backend interface.
-func Backend(t *testing.T, backend vote.Backend) {
+// Backend checks that a backend implements the collect.Backend interface.
+func Backend(t *testing.T, backend collect.Backend) {
 	t.Helper()
 
 	pollID := 1

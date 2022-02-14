@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/OpenSlides/openslides-vote-service/internal/backends/redis"
-	"github.com/OpenSlides/openslides-vote-service/internal/backends/test"
+	"github.com/OpenSlides/openslides-vote-service/backends/redis"
+	"github.com/OpenSlides/openslides-vote-service/backends/test"
 	"github.com/ory/dockertest/v3"
 )
 
