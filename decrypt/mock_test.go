@@ -8,7 +8,7 @@ import (
 type cryptoMock struct{}
 
 // PublicMainKey returns the public main key and the signature of the key.
-func (c cryptoMock) PublicMainKey(key []byte) (pubKey []byte, err error) {
+func (c cryptoMock) PublicMainKey() (pubKey []byte, err error) {
 	return []byte("mainPubKey"), nil
 }
 

@@ -1,50 +1,88 @@
 package crypto
 
 import (
-	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/sha512"
 	"fmt"
 	"io"
+	"math/big"
+
+	"github.com/ostcar/eciesgo"
 )
 
 // Crypto implements all cryptographic functions needed for the decrypt service.
 type Crypto struct {
-	mainKey []byte
+	mainKey ecdsa.PrivateKey
 	random  io.Reader
 }
 
 // New initializes a Crypto object with a main key and a random source.
 func New(mainKey []byte, random io.Reader) Crypto {
 	return Crypto{
-		mainKey: mainKey,
+		mainKey: mainFromBytes(mainKey),
 		random:  random,
 	}
 }
 
-// PublicMainKey returns the public main key and the signature of the key.
-func (c Crypto) PublicMainKey(key []byte) (pubKey []byte, err error) {
-	return []byte("publicMainKey"), nil
+func mainFromBytes(priv []byte) ecdsa.PrivateKey {
+	curve := elliptic.P521()
+	x, y := curve.ScalarBaseMult(priv)
+
+	return ecdsa.PrivateKey{
+		PublicKey: ecdsa.PublicKey{
+			Curve: curve,
+			X:     x,
+			Y:     y,
+		},
+		D: new(big.Int).SetBytes(priv),
+	}
 }
 
 // CreatePollKey creates a new keypair for a poll.
-func (c Crypto) CreatePollKey() (key []byte, err error) {
-	return []byte("secredPollKey"), nil
+func (c Crypto) CreatePollKey() ([]byte, error) {
+	key, err := eciesgo.GenerateKey(c.random)
+	if err != nil {
+		return nil, fmt.Errorf("generating eciesgo key: %w", err)
+	}
+
+	return key.Bytes(), nil
 }
 
 // PublicPollKey returns the public poll key and the signature for a given key.
 func (c Crypto) PublicPollKey(key []byte) (pubKey []byte, pubKeySig []byte, err error) {
-	return []byte("publicPollKey"), []byte("publicPollKeySig"), nil
+	pubKey = eciesgo.NewPrivateKeyFromBytes(key).PublicKey.Bytes(true)
+
+	// TODO: either make sure pubKey is small enough or hash it.
+	sig, err := ecdsa.SignASN1(c.random, &c.mainKey, pubKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("signing key: %w", err)
+	}
+
+	return pubKey, sig, nil
 }
 
 // Decrypt returned the plaintext from value using the key.
 func (c Crypto) Decrypt(key []byte, value []byte) ([]byte, error) {
-	prefix := []byte("enc:")
-	if !bytes.HasPrefix(value, prefix) {
-		return nil, fmt.Errorf("unincrypted vote: %s", value)
+	pollKey := eciesgo.NewPrivateKeyFromBytes(key)
+
+	decrypted, err := eciesgo.Decrypt(pollKey, value)
+	if err != nil {
+		return nil, fmt.Errorf("ecies decrypt: %w", err)
 	}
-	return bytes.TrimPrefix(value, prefix), nil
+
+	return decrypted, nil
 }
 
 // Sign returns the signature for the given data.
 func (c Crypto) Sign(value []byte) ([]byte, error) {
-	return []byte(fmt.Sprintf("sig:%s", value)), nil
+	hasher := sha512.New()
+	hash := hasher.Sum(value)
+
+	sig, err := ecdsa.SignASN1(c.random, &c.mainKey, hash)
+	if err != nil {
+		return nil, fmt.Errorf("signing data: %w", err)
+	}
+
+	return sig, nil
 }

@@ -2,6 +2,8 @@ module github.com/OpenSlides/openslides-vote-service
 
 go 1.17
 
+replace github.com/ostcar/eciesgo => ../ecies
+
 require (
 	github.com/OpenSlides/openslides-autoupdate-service v0.4.1-0.20220127132829-32c1dbc480e8
 	github.com/golang/protobuf v1.5.2
@@ -9,6 +11,7 @@ require (
 	github.com/jackc/pgconn v1.10.1
 	github.com/jackc/pgx/v4 v4.14.1
 	github.com/ory/dockertest/v3 v3.8.1
+	github.com/ostcar/eciesgo v0.0.0-00010101000000-000000000000
 	google.golang.org/grpc v1.44.0
 	google.golang.org/protobuf v1.27.1
 )
@@ -23,6 +26,7 @@ require (
 	github.com/docker/docker v20.10.12+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
+	github.com/fomichev/secp256k1 v0.0.0-20180413221153-00116ff8c62f // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
@@ -49,7 +53,7 @@ require (
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
 	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9 // indirect
 	golang.org/x/text v0.3.7 // indirect
-	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/genproto v0.0.0-20200904004341-0bd0a958aa1d // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )

@@ -195,9 +195,6 @@ func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byt
 
 // Crypto implements all required cryptographic functions.
 type Crypto interface {
-	// PublicMainKey returns the public main key and the signature of the key.
-	PublicMainKey(key []byte) (pubKey []byte, err error)
-
 	// CreatePollKey creates a new keypair for a poll.
 	CreatePollKey() (key []byte, err error)
 
