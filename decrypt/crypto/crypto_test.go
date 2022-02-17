@@ -48,7 +48,7 @@ func TestDecrypt(t *testing.T) {
 
 	plaintext := "this is my vote"
 
-	encrypted, err := eciesgo.Encrypt(mockPrivateEncryptKey(t).PublicKey, []byte(plaintext))
+	encrypted, err := eciesgo.Encrypt(readerMock{}, mockPrivateEncryptKey(t).PublicKey, []byte(plaintext))
 	if err != nil {
 		t.Fatalf("encrypting plaintext: %v", err)
 	}
