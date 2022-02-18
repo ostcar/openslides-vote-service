@@ -9,10 +9,11 @@ import (
 
 	"github.com/OpenSlides/openslides-vote-service/decrypt/crypto"
 	"github.com/ostcar/eciesgo"
+	"golang.org/x/crypto/curve25519"
 )
 
 func TestCreatePollKey(t *testing.T) {
-	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), readerMock{})
+	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), randomMock{})
 
 	key, err := c.CreatePollKey()
 	if err != nil {
@@ -25,7 +26,7 @@ func TestCreatePollKey(t *testing.T) {
 }
 
 func TestPublicPollKey(t *testing.T) {
-	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), readerMock{})
+	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), randomMock{})
 
 	pub, sig, err := c.PublicPollKey(mockPrivateEncryptKey(t).Bytes())
 	if err != nil {
@@ -44,16 +45,22 @@ func TestPublicPollKey(t *testing.T) {
 }
 
 func TestDecrypt(t *testing.T) {
-	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), readerMock{})
+	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), randomMock{})
 
-	plaintext := "this is my vote"
+	plaintext := "exampleplaintext" //"this is my vote"
 
-	encrypted, err := eciesgo.Encrypt(readerMock{}, mockPrivateEncryptKey(t).PublicKey, []byte(plaintext))
+	privKey := make([]byte, 32)
+	pubKey, err := curve25519.X25519(privKey, curve25519.Basepoint)
+	if err != nil {
+		t.Fatalf("creating public key: %v", err)
+	}
+
+	encrypted, err := c.Encrypt(randomMock{}, pubKey, []byte(plaintext))
 	if err != nil {
 		t.Fatalf("encrypting plaintext: %v", err)
 	}
 
-	decrypted, err := c.Decrypt(mockPrivateEncryptKey(t).Bytes(), encrypted)
+	decrypted, err := c.Decrypt(privKey, encrypted)
 	if err != nil {
 		t.Errorf("decrypt: %v", err)
 	}
@@ -64,7 +71,7 @@ func TestDecrypt(t *testing.T) {
 }
 
 func TestSign(t *testing.T) {
-	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), readerMock{})
+	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), randomMock{})
 
 	data := []byte("this is my value")
 	hash := sha512.New().Sum(data)
@@ -83,7 +90,7 @@ func TestSign(t *testing.T) {
 func mockPrivateEncryptKey(t testing.TB) *eciesgo.PrivateKey {
 	t.Helper()
 
-	key, err := eciesgo.GenerateKey(readerMock{})
+	key, err := eciesgo.GenerateKey(randomMock{})
 	if err != nil {
 		t.Fatalf("creating key: %v", err)
 	}
@@ -94,7 +101,7 @@ func mockPrivateEncryptKey(t testing.TB) *eciesgo.PrivateKey {
 func mockPrivateSignKey(t testing.TB) *ecdsa.PrivateKey {
 	t.Helper()
 
-	k, err := ecdsa.GenerateKey(elliptic.P521(), readerMock{})
+	k, err := ecdsa.GenerateKey(elliptic.P521(), randomMock{})
 	if err != nil {
 		t.Fatalf("creating key: %v", err)
 	}
@@ -102,9 +109,9 @@ func mockPrivateSignKey(t testing.TB) *ecdsa.PrivateKey {
 	return k
 }
 
-type readerMock struct{}
+type randomMock struct{}
 
-func (r readerMock) Read(data []byte) (n int, err error) {
+func (r randomMock) Read(data []byte) (n int, err error) {
 	for i := 0; i < len(data); i++ {
 		data[i] = '0'
 	}

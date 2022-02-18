@@ -1,6 +1,8 @@
 package crypto
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/sha512"
@@ -9,6 +11,12 @@ import (
 	"math/big"
 
 	"github.com/ostcar/eciesgo"
+	"golang.org/x/crypto/curve25519"
+)
+
+const (
+	pubKeySize = 32
+	ivSize     = aes.BlockSize
 )
 
 // Crypto implements all cryptographic functions needed for the decrypt service.
@@ -18,6 +26,8 @@ type Crypto struct {
 }
 
 // New initializes a Crypto object with a main key and a random source.
+//
+// mainKey ....
 func New(mainKey []byte, random io.Reader) Crypto {
 	return Crypto{
 		mainKey: mainFromBytes(mainKey),
@@ -63,15 +73,25 @@ func (c Crypto) PublicPollKey(key []byte) (pubKey []byte, pubKeySig []byte, err 
 }
 
 // Decrypt returned the plaintext from value using the key.
-func (c Crypto) Decrypt(key []byte, value []byte) ([]byte, error) {
-	pollKey := eciesgo.NewPrivateKeyFromBytes(key)
+func (c Crypto) Decrypt(privateKey []byte, ciphertext []byte) ([]byte, error) {
+	ephemeralPublicKey := ciphertext[:pubKeySize]
+	iv := ciphertext[pubKeySize : pubKeySize+ivSize]
 
-	decrypted, err := eciesgo.Decrypt(pollKey, value)
+	sharedKey, err := curve25519.X25519(privateKey, ephemeralPublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("ecies decrypt: %w", err)
+		return nil, fmt.Errorf("creating shared secred: %w", err)
 	}
 
-	return decrypted, nil
+	block, err := aes.NewCipher(sharedKey)
+	if err != nil {
+		return nil, fmt.Errorf("creating aes chipher: %w", err)
+	}
+
+	mode := cipher.NewCBCDecrypter(block, iv)
+	plaintext := make([]byte, len(ciphertext)-pubKeySize-ivSize)
+	mode.CryptBlocks(plaintext, ciphertext[pubKeySize+ivSize:])
+
+	return plaintext, nil
 }
 
 // Sign returns the signature for the given data.
@@ -85,4 +105,44 @@ func (c Crypto) Sign(value []byte) ([]byte, error) {
 	}
 
 	return sig, nil
+}
+
+// Encrypt creates a cyphertext from plaintext using the given public key.
+func (c Crypto) Encrypt(random io.Reader, publicKey []byte, plaintext []byte) ([]byte, error) {
+	ciphertext := make([]byte, pubKeySize+ivSize+len(plaintext))
+
+	ephemeralPrivateKey := make([]byte, curve25519.ScalarSize)
+	if _, err := io.ReadFull(random, ephemeralPrivateKey); err != nil {
+		return nil, fmt.Errorf("reading from random source: %w", err)
+	}
+
+	ephemeralPublicKey, err := curve25519.X25519(ephemeralPrivateKey, curve25519.Basepoint)
+	if err != nil {
+		return nil, fmt.Errorf("creating ephemeral public key: %w", err)
+	}
+	copy(ciphertext[:pubKeySize], ephemeralPublicKey)
+
+	sharedKey, err := curve25519.X25519(ephemeralPrivateKey, publicKey)
+	if err != nil {
+		return nil, fmt.Errorf("creating shared secred: %w", err)
+	}
+
+	block, err := aes.NewCipher(sharedKey)
+	if err != nil {
+		return nil, fmt.Errorf("creating aes chipher: %w", err)
+	}
+
+	iv := ciphertext[pubKeySize : pubKeySize+ivSize]
+	if _, err := random.Read(iv); err != nil {
+		return nil, fmt.Errorf("read random for nonce: %w", err)
+	}
+
+	// TODO: add padding https://tools.ietf.org/html/rfc5246#section-6.2.3.2
+
+	mode := cipher.NewCBCEncrypter(block, iv)
+	mode.CryptBlocks(ciphertext[pubKeySize+ivSize:], plaintext)
+
+	// TODO hmac
+
+	return ciphertext, nil
 }

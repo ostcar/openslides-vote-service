@@ -11,13 +11,13 @@ func benchmarkDecrypt(b *testing.B, voteCount int, voteByteSize int) {
 	mainKey := mockPrivateSignKey(b)
 	pollKey := mockPrivateEncryptKey(b)
 
-	cr := crypto.New(mainKey.D.Bytes(), readerMock{})
+	cr := crypto.New(mainKey.D.Bytes(), randomMock{})
 
 	plaintext := make([]byte, voteByteSize)
 
 	votes := make([][]byte, voteCount)
 	for i := 0; i < voteCount; i++ {
-		decrypted, err := eciesgo.Encrypt(readerMock{}, pollKey.PublicKey, plaintext)
+		decrypted, err := eciesgo.Encrypt(randomMock{}, pollKey.PublicKey, plaintext)
 		if err != nil {
 			b.Fatalf("encrypting vote: %v", err)
 		}
