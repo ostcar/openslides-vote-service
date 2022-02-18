@@ -11,7 +11,7 @@ COPY internal internal
 
 # Build service in seperate stage.
 FROM base as builder
-RUN CGO_ENABLED=0 go build ./cmd/vote
+RUN CGO_ENABLED=0 go build ./cmd/vote-service
 
 
 # Test build.

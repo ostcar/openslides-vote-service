@@ -14,24 +14,22 @@ message StartRequest {
 }
 
 message StartResponse {
-  string pub_key = 1;
-  string pub_sig = 2;
+  bytes pub_key = 1;
+  bytes pub_sig = 2;
 }
 
 message StopRequest {
   string id = 1;
-  repeated string votes = 2;
+  repeated bytes votes = 2;
 }
 
 message StopResponse {
-  repeated string votes = 1;
-  string signature = 2;
+  bytes votes = 1;
+  bytes signature = 2;
 }
 
 message ClearRequest {
   string id = 1;
 }
 
-message ClearResponse {
-  string signature = 1;
-}
+message ClearResponse {}
