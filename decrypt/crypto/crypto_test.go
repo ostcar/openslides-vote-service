@@ -2,50 +2,41 @@ package crypto_test
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/sha512"
+	"crypto/ed25519"
 	"testing"
 
 	"github.com/OpenSlides/openslides-vote-service/decrypt/crypto"
-	"github.com/ostcar/eciesgo"
 	"golang.org/x/crypto/curve25519"
 )
 
 func TestCreatePollKey(t *testing.T) {
-	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), randomMock{})
+	c := crypto.New(mockMainKey(), randomMock{})
 
 	key, err := c.CreatePollKey()
 	if err != nil {
 		t.Fatalf("CreatePollKey: %v", err)
 	}
 
-	if key == nil || !bytes.Equal(key, mockPrivateEncryptKey(t).Bytes()) {
-		t.Errorf("poll key != mock private Key. Expected them to be the same in testing")
+	if key == nil || !bytes.Equal(key, make([]byte, 32)) {
+		t.Errorf("wrong poll key")
 	}
 }
 
 func TestPublicPollKey(t *testing.T) {
-	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), randomMock{})
+	c := crypto.New(mockMainKey(), randomMock{})
 
-	pub, sig, err := c.PublicPollKey(mockPrivateEncryptKey(t).Bytes())
+	pub, sig, err := c.PublicPollKey(mockPollKey())
 	if err != nil {
 		t.Fatalf("PublicPollKey: %v", err)
 	}
 
-	mockPublic := eciesgo.NewPrivateKeyFromBytes(mockPrivateEncryptKey(t).Bytes()).PublicKey.Bytes(true)
-
-	if pub == nil || !bytes.Equal(pub, mockPublic) {
-		t.Errorf("pub key != pub mock key. Expected them to be the same in testing")
-	}
-
-	if !ecdsa.VerifyASN1(&mockPrivateSignKey(t).PublicKey, pub, sig) {
+	if !ed25519.Verify(mockMainKey().Public().(ed25519.PublicKey), pub, sig) {
 		t.Errorf("signature does not match public key")
 	}
 }
 
 func TestDecrypt(t *testing.T) {
-	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), randomMock{})
+	c := crypto.New(mockMainKey(), randomMock{})
 
 	plaintext := "this is my vote"
 
@@ -71,49 +62,33 @@ func TestDecrypt(t *testing.T) {
 }
 
 func TestSign(t *testing.T) {
-	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), randomMock{})
+	c := crypto.New(mockMainKey(), randomMock{})
 
 	data := []byte("this is my value")
-	hash := sha512.New().Sum(data)
 
 	sig, err := c.Sign(data)
 	if err != nil {
 		t.Fatalf("signing: %v", err)
 	}
 
-	if !ecdsa.VerifyASN1(&mockPrivateSignKey(t).PublicKey, hash, sig) {
-		t.Errorf("sig does not match")
+	if !ed25519.Verify(mockMainKey().Public().(ed25519.PublicKey), data, sig) {
+		t.Errorf("signature does not match public key")
 	}
-
 }
 
-func mockPrivateEncryptKey(t testing.TB) *eciesgo.PrivateKey {
-	t.Helper()
-
-	key, err := eciesgo.GenerateKey(randomMock{})
-	if err != nil {
-		t.Fatalf("creating key: %v", err)
-	}
-
-	return key
+func mockPollKey() []byte {
+	return make([]byte, curve25519.PointSize)
 }
 
-func mockPrivateSignKey(t testing.TB) *ecdsa.PrivateKey {
-	t.Helper()
-
-	k, err := ecdsa.GenerateKey(elliptic.P521(), randomMock{})
-	if err != nil {
-		t.Fatalf("creating key: %v", err)
-	}
-
-	return k
+func mockMainKey() ed25519.PrivateKey {
+	return ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
 }
 
 type randomMock struct{}
 
 func (r randomMock) Read(data []byte) (n int, err error) {
 	for i := 0; i < len(data); i++ {
-		data[i] = '0'
+		data[i] = 0
 	}
 	return len(data), nil
 }

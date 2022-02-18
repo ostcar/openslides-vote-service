@@ -8,7 +8,7 @@ import (
 )
 
 func benchmarkDecrypt(b *testing.B, voteCount int, voteByteSize int) {
-	cr := crypto.New(mockPrivateSignKey(b).D.Bytes(), randomMock{})
+	cr := crypto.New(mockMainKey(), randomMock{})
 
 	plaintext := make([]byte, voteByteSize)
 
