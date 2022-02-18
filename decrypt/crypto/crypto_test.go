@@ -47,7 +47,7 @@ func TestPublicPollKey(t *testing.T) {
 func TestDecrypt(t *testing.T) {
 	c := crypto.New(mockPrivateSignKey(t).D.Bytes(), randomMock{})
 
-	plaintext := "exampleplaintext" //"this is my vote"
+	plaintext := "this is my vote"
 
 	privKey := make([]byte, 32)
 	pubKey, err := curve25519.X25519(privKey, curve25519.Basepoint)

@@ -16,7 +16,7 @@ import (
 
 const (
 	pubKeySize = 32
-	ivSize     = aes.BlockSize
+	nonceSize  = 12
 )
 
 // Crypto implements all cryptographic functions needed for the decrypt service.
@@ -75,7 +75,7 @@ func (c Crypto) PublicPollKey(key []byte) (pubKey []byte, pubKeySig []byte, err 
 // Decrypt returned the plaintext from value using the key.
 func (c Crypto) Decrypt(privateKey []byte, ciphertext []byte) ([]byte, error) {
 	ephemeralPublicKey := ciphertext[:pubKeySize]
-	iv := ciphertext[pubKeySize : pubKeySize+ivSize]
+	nonce := ciphertext[pubKeySize : pubKeySize+nonceSize]
 
 	sharedKey, err := curve25519.X25519(privateKey, ephemeralPublicKey)
 	if err != nil {
@@ -87,9 +87,15 @@ func (c Crypto) Decrypt(privateKey []byte, ciphertext []byte) ([]byte, error) {
 		return nil, fmt.Errorf("creating aes chipher: %w", err)
 	}
 
-	mode := cipher.NewCBCDecrypter(block, iv)
-	plaintext := make([]byte, len(ciphertext)-pubKeySize-ivSize)
-	mode.CryptBlocks(plaintext, ciphertext[pubKeySize+ivSize:])
+	mode, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("create gcm mode: %w", err)
+	}
+
+	plaintext, err := mode.Open(nil, nonce, ciphertext[pubKeySize+nonceSize:], nil)
+	if err != nil {
+		return nil, fmt.Errorf("decrypting plaintext: %w", err)
+	}
 
 	return plaintext, nil
 }
@@ -109,7 +115,7 @@ func (c Crypto) Sign(value []byte) ([]byte, error) {
 
 // Encrypt creates a cyphertext from plaintext using the given public key.
 func (c Crypto) Encrypt(random io.Reader, publicKey []byte, plaintext []byte) ([]byte, error) {
-	ciphertext := make([]byte, pubKeySize+ivSize+len(plaintext))
+	cipherPrefix := make([]byte, pubKeySize+nonceSize)
 
 	ephemeralPrivateKey := make([]byte, curve25519.ScalarSize)
 	if _, err := io.ReadFull(random, ephemeralPrivateKey); err != nil {
@@ -120,7 +126,7 @@ func (c Crypto) Encrypt(random io.Reader, publicKey []byte, plaintext []byte) ([
 	if err != nil {
 		return nil, fmt.Errorf("creating ephemeral public key: %w", err)
 	}
-	copy(ciphertext[:pubKeySize], ephemeralPublicKey)
+	copy(cipherPrefix[:pubKeySize], ephemeralPublicKey)
 
 	sharedKey, err := curve25519.X25519(ephemeralPrivateKey, publicKey)
 	if err != nil {
@@ -132,17 +138,17 @@ func (c Crypto) Encrypt(random io.Reader, publicKey []byte, plaintext []byte) ([
 		return nil, fmt.Errorf("creating aes chipher: %w", err)
 	}
 
-	iv := ciphertext[pubKeySize : pubKeySize+ivSize]
-	if _, err := random.Read(iv); err != nil {
+	nonce := cipherPrefix[pubKeySize:]
+	if _, err := random.Read(nonce); err != nil {
 		return nil, fmt.Errorf("read random for nonce: %w", err)
 	}
 
-	// TODO: add padding https://tools.ietf.org/html/rfc5246#section-6.2.3.2
+	mode, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("create gcm mode: %w", err)
+	}
 
-	mode := cipher.NewCBCEncrypter(block, iv)
-	mode.CryptBlocks(ciphertext[pubKeySize+ivSize:], plaintext)
+	encrypted := mode.Seal(nil, nonce, plaintext, nil)
 
-	// TODO hmac
-
-	return ciphertext, nil
+	return append(cipherPrefix, encrypted...), nil
 }
