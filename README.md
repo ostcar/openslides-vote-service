@@ -214,5 +214,10 @@ The Service uses the following environment variables:
 * `AUTH_COOKIE_KEY_FILE`: File to read the auth cookie key. Only used when
   `OPENSLIDES_DEVELOPMENT` is not set. Default is `/run/secrets/auth_cookie_key`.
 * `AUTH_PROTOCOL`: Protocol of the auth servicer. The default is `http`.
+* `VOTE_DECRYPT_KEY_FILE`: File to read the main key for decryption. If set, start
+  the service with the decrypt module. If not set, connects to the vote-decrypt-service.
+  The default is an empty string.
+* `VOTE_DECRYPT_SERVICE`: Host and port of the vote-decrypt-service. Only used if
+  no decrypt key is given. Default: `localhost:9014`.
 * `OPENSLIDES_DEVELOPMENT`: If set, the service starts, even when secrets (see
   below) are not given. The default is `false`. It also enables debug output.

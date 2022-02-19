@@ -1,2 +1,5 @@
 /vote-service
 /vote-decrypt-service
+/vote-test-client
+/main_key_file
+/vote_data

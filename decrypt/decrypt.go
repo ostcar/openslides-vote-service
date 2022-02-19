@@ -44,6 +44,7 @@ func New(crypto Crypto, store Store, options ...Option) *Decrypt {
 // It saves the poll meta data and generates a cryptographic key and returns the
 // public key.
 func (d *Decrypt) Start(ctx context.Context, pollID string) (pubKey []byte, pubKeySig []byte, err error) {
+	// TODO: Load Key and CreatePoll Key have probably be atomic.
 	pollKey, err := d.store.LoadKey(pollID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading poll key: %w", err)
@@ -169,7 +170,12 @@ func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byt
 				decrypted, err := d.crypto.Decrypt(key, vote)
 				if err != nil {
 					// TODO: Handle error
-					decrypted = []byte(fmt.Sprintf("error decrypting: %v", err))
+					vote := struct {
+						Error string `json:"error"`
+					}{
+						fmt.Sprintf("error decrypting: %v", err),
+					}
+					decrypted, _ = json.Marshal(vote)
 				}
 
 				// TODO:Check poll ID

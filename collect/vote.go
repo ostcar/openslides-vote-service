@@ -138,12 +138,15 @@ func (v *Vote) Stop(ctx context.Context, pollID int, w io.Writer) (err error) {
 
 	votes := make([][]byte, len(rawBallots))
 	for i := range rawBallots {
-		var b ballot
-		if err := json.Unmarshal(rawBallots[i], &b); err != nil {
-			return fmt.Errorf("decoding ballot from backend: %w", err)
+		var vote struct {
+			Value []byte `json:"value"`
 		}
+		if err := json.Unmarshal(rawBallots[i], &vote); err != nil {
+			return fmt.Errorf("decoding vote from backend: %w", err)
+		}
+
 		// TODO: only decrypt values in hidden polls.
-		votes[i] = []byte(b.Value.str)
+		votes[i] = vote.Value
 	}
 
 	decrypted, signature, err := v.decrypter.Stop(ctx, v.qualifiedID(pollID), votes)

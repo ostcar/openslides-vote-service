@@ -23,14 +23,10 @@ type Crypto struct {
 
 // New initializes a Crypto object with a main key and a random source.
 //
-// mainKey is a ed25519 key. It differs from RFC 8032 that the private key has
-// the public key as a suffix. So the byte slice has to be 64 bytes long. The
-// first 32 bytes is the private key and the last 32 bytes is the public key.
-//
-// See: https://pkg.go.dev/crypto/ed25519
+// mainKey has to be a 32 byte slice that represents a ed25519 key.
 func New(mainKey []byte, random io.Reader) Crypto {
 	return Crypto{
-		mainKey: ed25519.PrivateKey(mainKey),
+		mainKey: ed25519.NewKeyFromSeed(mainKey),
 		random:  random,
 	}
 }
@@ -64,6 +60,10 @@ func (c Crypto) PublicPollKey(privateKey []byte) (pubKey []byte, pubKeySig []byt
 // 32 bytes is the public empheral key from the client. The next 12 byte is the
 // used nonce for aes-gcm. All later bytes is the encrypted vote.
 func (c Crypto) Decrypt(privateKey []byte, ciphertext []byte) ([]byte, error) {
+	if len(ciphertext) < pubKeySize+nonceSize+aes.BlockSize {
+		return nil, fmt.Errorf("invalid cipher")
+	}
+
 	ephemeralPublicKey := ciphertext[:pubKeySize]
 	nonce := ciphertext[pubKeySize : pubKeySize+nonceSize]
 
@@ -99,7 +99,7 @@ func (c Crypto) Sign(value []byte) ([]byte, error) {
 //
 // This method is not needed or used by the decrypt service. It is only
 // implemented in this package for debugging and testing.
-func (c Crypto) Encrypt(random io.Reader, publicKey []byte, plaintext []byte) ([]byte, error) {
+func Encrypt(random io.Reader, publicKey []byte, plaintext []byte) ([]byte, error) {
 	cipherPrefix := make([]byte, pubKeySize+nonceSize)
 
 	ephemeralPrivateKey := make([]byte, curve25519.ScalarSize)

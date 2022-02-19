@@ -20,7 +20,7 @@ func benchmarkDecrypt(b *testing.B, voteCount int, voteByteSize int) {
 
 	votes := make([][]byte, voteCount)
 	for i := 0; i < voteCount; i++ {
-		encrypted, err := cr.Encrypt(randomMock{}, pubKey, plaintext)
+		encrypted, err := crypto.Encrypt(randomMock{}, pubKey, plaintext)
 		if err != nil {
 			b.Fatalf("encrypting vote: %v", err)
 		}

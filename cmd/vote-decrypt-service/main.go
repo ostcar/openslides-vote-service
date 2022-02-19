@@ -2,17 +2,17 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
 
-	"github.com/OpenSlides/openslides-vote-service/backends/memory"
 	"github.com/OpenSlides/openslides-vote-service/decrypt"
 	"github.com/OpenSlides/openslides-vote-service/decrypt/crypto"
 	"github.com/OpenSlides/openslides-vote-service/decrypt/grpc"
+	"github.com/OpenSlides/openslides-vote-service/decrypt/store"
 )
 
 func main() {
@@ -27,20 +27,45 @@ func main() {
 func run(ctx context.Context) error {
 	random := rand.Reader
 
-	mainKey, _, err := ed25519.GenerateKey(random)
+	if len(os.Args) < 2 {
+		return fmt.Errorf("Usage: %s main_key_file", os.Args[0])
+	}
+
+	// TODO: set port and vote_data path via flags or environment
+
+	mainKey, err := readMainKey(os.Args[1])
 	if err != nil {
-		return fmt.Errorf("creating main key: %w", err)
+		return fmt.Errorf("getting main key: %w", err)
 	}
 
 	cr := crypto.New(mainKey, random)
 
-	decrypter := decrypt.New(cr, memory.New())
+	st := store.New("vote_data")
+
+	decrypter := decrypt.New(cr, st)
 
 	if err := grpc.RunServer(ctx, decrypter, "localhost:9014"); err != nil {
 		return fmt.Errorf("running grpc server: %w", err)
 	}
 
 	return nil
+}
+
+// readMainKey reads the first 32 bytes from the given file. It returns an
+// error, if the file is shorter.
+func readMainKey(file string) ([]byte, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, fmt.Errorf("open main file: %w", err)
+	}
+	defer f.Close()
+
+	key := make([]byte, 32)
+	if _, err := io.ReadFull(f, key); err != nil {
+		return nil, fmt.Errorf("reading key: %w", err)
+	}
+
+	return key, nil
 }
 
 // interruptContext works like signal.NotifyContext

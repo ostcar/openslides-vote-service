@@ -46,7 +46,7 @@ func TestDecrypt(t *testing.T) {
 		t.Fatalf("creating public key: %v", err)
 	}
 
-	encrypted, err := c.Encrypt(randomMock{}, pubKey, []byte(plaintext))
+	encrypted, err := crypto.Encrypt(randomMock{}, pubKey, []byte(plaintext))
 	if err != nil {
 		t.Fatalf("encrypting plaintext: %v", err)
 	}

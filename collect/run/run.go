@@ -18,6 +18,7 @@ import (
 	"github.com/OpenSlides/openslides-vote-service/collect"
 	"github.com/OpenSlides/openslides-vote-service/decrypt"
 	"github.com/OpenSlides/openslides-vote-service/decrypt/crypto"
+	"github.com/OpenSlides/openslides-vote-service/decrypt/grpc"
 	"github.com/OpenSlides/openslides-vote-service/internal/log"
 )
 
@@ -57,10 +58,29 @@ func Run(ctx context.Context, environment []string, getSecret func(name string) 
 		return fmt.Errorf("building backends: %w", err)
 	}
 
-	// TODO: also use grpc backend
-	memory := memory.New() // TODO: always the same backend? probably postgres?
-	cry := crypto.New([]byte("mainKey"), rand.Reader)
-	decrypter := decrypt.New(cry, memory)
+	var decrypter collect.Decrypter
+	if keyFile := env["VOTE_DECRYPT_KEY_FILE"]; keyFile == "" {
+		d, err := grpc.NewClient(env["VOTE_DECRYPT_SERVICE"])
+		if err != nil {
+			return fmt.Errorf("connection to vote decrypt service cia grpc: %w", err)
+		}
+		decrypter = d
+		log.Info("connect to external vote decrypt service via grpc")
+
+	} else {
+		mainKey, err := getSecret(keyFile)
+		if err != nil {
+			return fmt.Errorf("get mainkey from secret: %w", err)
+		}
+		if len(mainKey) < 32 {
+			return fmt.Errorf("the mainkey file has to contain at least 32 bytes")
+		}
+
+		memory := memory.New() // TODO: always the same backend? probably postgres?
+		cry := crypto.New([]byte(mainKey), rand.Reader)
+		decrypter = decrypt.New(cry, memory)
+		log.Info("using internal decrypter with known main key")
+	}
 
 	service, err := collect.New(fastBackend, longBackend, ds, counter, decrypter)
 	if err != nil {
@@ -126,6 +146,9 @@ func defaultEnv(environment []string) map[string]string {
 		"VOTE_DATABASE_HOST":          "localhost",
 		"VOTE_DATABASE_PORT":          "5432",
 		"VOTE_DATABASE_NAME":          "vote",
+
+		"VOTE_DECRYPT_KEY_FILE": "",
+		"VOTE_DECRYPT_SERVICE":  "localhost:9014",
 
 		"OPENSLIDES_DEVELOPMENT": "false",
 	}

@@ -39,6 +39,56 @@ func RunServer(ctx context.Context, decrypt *decrypt.Decrypt, addr string) error
 	return nil
 }
 
+// Client holds the connection to a server
+type Client struct {
+	decryptClient DecryptClient
+}
+
+// NewClient creates a connection to a decrypt grpc server and wrapps then
+// into a decrypt.crypto interface.
+func NewClient(addr string) (*Client, error) {
+	// TODO: use secure connection
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	if err != nil {
+		return nil, fmt.Errorf("creating connection to decrypt service: %w", err)
+	}
+
+	// TODO: Close conn
+
+	decrypter := NewDecryptClient(conn)
+	return &Client{decryptClient: decrypter}, nil
+}
+
+// Start calls the Start grpc message.
+func (c *Client) Start(ctx context.Context, pollID string) (pubKey []byte, pubKeySig []byte, err error) {
+	resp, err := c.decryptClient.Start(ctx, &StartRequest{Id: pollID})
+	if err != nil {
+		return nil, nil, fmt.Errorf("sending grpc message: %w", err)
+	}
+
+	return resp.PubKey, resp.PubSig, nil
+}
+
+// Stop calls the Stop grpc message.
+func (c *Client) Stop(ctx context.Context, pollID string, voteList [][]byte) (decryptedContent, signature []byte, err error) {
+	resp, err := c.decryptClient.Stop(ctx, &StopRequest{Id: pollID, Votes: voteList})
+	if err != nil {
+		return nil, nil, fmt.Errorf("sending grpc message: %w", err)
+	}
+	return resp.Votes, resp.Signature, nil
+}
+
+// Clear calls the Clear grpc message.
+func (c *Client) Clear(ctx context.Context, pollID string) error {
+	_, err := c.decryptClient.Clear(ctx, &ClearRequest{Id: pollID})
+	if err != nil {
+		return fmt.Errorf("sending grpc message: %w", err)
+	}
+
+	return nil
+}
+
+// TODO: wrap all errors so not information is leaked.
 type grpcServer struct {
 	decrypt *decrypt.Decrypt
 }
