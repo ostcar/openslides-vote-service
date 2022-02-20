@@ -30,7 +30,7 @@ EXPOSE 9012
 ENV MESSAGING redis
 ENV AUTH ticket
 
-CMD CompileDaemon -log-prefix=false -build="go build ./cmd/vote" -command="./vote"
+CMD CompileDaemon -log-prefix=false -build="go build ./cmd/vote-service" -command="./vote-service"
 
 
 # Productive build
