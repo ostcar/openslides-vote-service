@@ -22,19 +22,21 @@ func run() error {
 		return fmt.Errorf("Usage: %s POLL_KEY_FILE", os.Args[0])
 	}
 
-	key, err := os.ReadFile(os.Args[1])
+	privKey, err := os.ReadFile(os.Args[1])
 	if err != nil {
 		return fmt.Errorf("reading poll key file: %w", err)
 	}
 
-	fmt.Println("key:", key)
+	cr := crypto.New(make([]byte, 32), rand.Reader)
+	pubKey, _, err := cr.PublicPollKey(privKey)
+	if err != nil {
+		return fmt.Errorf("creating public key: %w", err)
+	}
 
-	cipher, err := crypto.Encrypt(rand.Reader, key, []byte(`"Y"`))
+	cipher, err := crypto.Encrypt(rand.Reader, pubKey, []byte(`"Y"`))
 	if err != nil {
 		return fmt.Errorf("encrypting vote: %w", err)
 	}
-
-	fmt.Println("cipher:", cipher)
 
 	vote := struct {
 		Value []byte `json:"value"`

@@ -113,7 +113,9 @@ func handleStop(mux *http.ServeMux, stop stopper) {
 				return
 			}
 
+			fmt.Printf("\n\n\n")
 			fmt.Println("Original:", buf.String())
+			fmt.Printf("\n\n\n")
 			if err := convert4_0(w, buf); err != nil {
 				handleError(w, err, true)
 				return
@@ -135,11 +137,32 @@ func convert4_0(w io.Writer, r io.Reader) error {
 		return fmt.Errorf("decoding content: %w", err)
 	}
 
+	oldVotes := make([]json.RawMessage, len(newContent.Votes.Votes))
+	for i, vote := range newContent.Votes.Votes {
+		oldVote := struct {
+			RequestUser int             `json:"request_user_id,omitempty"`
+			VoteUser    int             `json:"vote_user_id,omitempty"`
+			Value       json.RawMessage `json:"value"`
+			Weight      string          `json:"weight"`
+		}{
+			0,
+			0,
+			vote,
+			"1.000000",
+		}
+		bs, err := json.Marshal(oldVote)
+		if err != nil {
+			return fmt.Errorf("decoding old vote %d: %v", i, err)
+		}
+
+		oldVotes[i] = bs
+	}
+
 	oldContent := struct {
 		Votes []json.RawMessage `json:"votes"`
 		Users []int             `json:"user_ids"`
 	}{
-		newContent.Votes.Votes,
+		oldVotes,
 		newContent.Users,
 	}
 

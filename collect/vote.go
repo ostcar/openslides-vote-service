@@ -145,8 +145,6 @@ func (v *Vote) Stop(ctx context.Context, pollID int, w io.Writer) (err error) {
 			return fmt.Errorf("decoding vote from backend: %w", err)
 		}
 
-		fmt.Println("cipher:", vote.Value)
-
 		// TODO: only decrypt values in hidden polls.
 		votes[i] = vote.Value
 	}
@@ -261,8 +259,6 @@ func (v *Vote) Vote(ctx context.Context, pollID, requestUser int, r io.Reader) (
 	if err := json.NewDecoder(r).Decode(&vote); err != nil {
 		return MessageError{ErrInvalid, fmt.Sprintf("decoding payload: %v", err)}
 	}
-
-	fmt.Println("value:", vote.Value)
 
 	voteUser, exist := vote.UserID.Value()
 	if !exist {
