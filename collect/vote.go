@@ -145,6 +145,8 @@ func (v *Vote) Stop(ctx context.Context, pollID int, w io.Writer) (err error) {
 			return fmt.Errorf("decoding vote from backend: %w", err)
 		}
 
+		fmt.Println("cipher:", vote.Value)
+
 		// TODO: only decrypt values in hidden polls.
 		votes[i] = vote.Value
 	}
@@ -260,6 +262,8 @@ func (v *Vote) Vote(ctx context.Context, pollID, requestUser int, r io.Reader) (
 		return MessageError{ErrInvalid, fmt.Sprintf("decoding payload: %v", err)}
 	}
 
+	fmt.Println("value:", vote.Value)
+
 	voteUser, exist := vote.UserID.Value()
 	if !exist {
 		voteUser = requestUser
@@ -317,14 +321,14 @@ func (v *Vote) Vote(ctx context.Context, pollID, requestUser int, r io.Reader) (
 	log.Debug("Using voteWeight %s", voteWeight)
 
 	voteData := struct {
-		RequestUser int             `json:"request_user_id,omitempty"`
-		VoteUser    int             `json:"vote_user_id,omitempty"`
-		Value       json.RawMessage `json:"value"`
-		Weight      string          `json:"weight"`
+		RequestUser int    `json:"request_user_id,omitempty"`
+		VoteUser    int    `json:"vote_user_id,omitempty"`
+		Value       []byte `json:"value"`
+		Weight      string `json:"weight"`
 	}{
 		requestUser,
 		voteUser,
-		vote.Value.original,
+		vote.Value,
 		voteWeight,
 	}
 
@@ -527,8 +531,9 @@ func (m *maybeInt) Value() (int, bool) {
 
 // TODO: Is this needed anymore? It is not used on cryted votes. Should it be used on named votes and "normal votes"?
 type ballot struct {
-	UserID maybeInt    `json:"user_id"`
-	Value  ballotValue `json:"value"`
+	UserID maybeInt `json:"user_id"`
+	//Value  ballotValue `json:"value"`
+	Value []byte `json:"value"`
 }
 
 func (v ballot) String() string {
@@ -539,93 +544,93 @@ func (v ballot) String() string {
 	return string(bs)
 }
 
-func (v *ballot) validate(poll pollConfig) error {
-	if poll.minAmount == 0 {
-		poll.minAmount = 1
-	}
+// func (v *ballot) validate(poll pollConfig) error {
+// 	if poll.minAmount == 0 {
+// 		poll.minAmount = 1
+// 	}
 
-	if poll.maxAmount == 0 {
-		poll.maxAmount = 1
-	}
+// 	if poll.maxAmount == 0 {
+// 		poll.maxAmount = 1
+// 	}
 
-	allowedOptions := make(map[int]bool, len(poll.options))
-	for _, o := range poll.options {
-		allowedOptions[o] = true
-	}
+// 	allowedOptions := make(map[int]bool, len(poll.options))
+// 	for _, o := range poll.options {
+// 		allowedOptions[o] = true
+// 	}
 
-	allowedGlobal := map[string]bool{
-		"Y": poll.globalYes,
-		"N": poll.globalNo,
-		"A": poll.globalAbstain,
-	}
+// 	allowedGlobal := map[string]bool{
+// 		"Y": poll.globalYes,
+// 		"N": poll.globalNo,
+// 		"A": poll.globalAbstain,
+// 	}
 
-	// Helper "error" that is not an error. Should help readability.
-	var voteIsValid error
+// 	// Helper "error" that is not an error. Should help readability.
+// 	var voteIsValid error
 
-	switch poll.method {
-	case "Y", "N":
-		switch v.Value.Type() {
-		case ballotValueString:
-			// The user answered with Y, N or A (or another invalid string).
-			if !allowedGlobal[v.Value.str] {
-				return InvalidVote("Global vote %s is not enabled", v.Value.str)
-			}
-			return voteIsValid
+// 	switch poll.method {
+// 	case "Y", "N":
+// 		switch v.Value.Type() {
+// 		case ballotValueString:
+// 			// The user answered with Y, N or A (or another invalid string).
+// 			if !allowedGlobal[v.Value.str] {
+// 				return InvalidVote("Global vote %s is not enabled", v.Value.str)
+// 			}
+// 			return voteIsValid
 
-		case ballotValueOptionAmount:
-			var sumAmount int
-			for optionID, amount := range v.Value.optionAmount {
-				if amount < 0 {
-					return InvalidVote("Your vote for option %d has to be >= 0", optionID)
-				}
+// 		case ballotValueOptionAmount:
+// 			var sumAmount int
+// 			for optionID, amount := range v.Value.optionAmount {
+// 				if amount < 0 {
+// 					return InvalidVote("Your vote for option %d has to be >= 0", optionID)
+// 				}
 
-				if !allowedOptions[optionID] {
-					return InvalidVote("Option_id %d does not belong to the poll", optionID)
-				}
+// 				if !allowedOptions[optionID] {
+// 					return InvalidVote("Option_id %d does not belong to the poll", optionID)
+// 				}
 
-				sumAmount += amount
-			}
+// 				sumAmount += amount
+// 			}
 
-			if sumAmount < poll.minAmount || sumAmount > poll.maxAmount {
-				return InvalidVote("The sum of your answers has to be between %d and %d", poll.minAmount, poll.maxAmount)
-			}
+// 			if sumAmount < poll.minAmount || sumAmount > poll.maxAmount {
+// 				return InvalidVote("The sum of your answers has to be between %d and %d", poll.minAmount, poll.maxAmount)
+// 			}
 
-			return voteIsValid
+// 			return voteIsValid
 
-		default:
-			return MessageError{ErrInvalid, "Your vote has a wrong format"}
-		}
+// 		default:
+// 			return MessageError{ErrInvalid, "Your vote has a wrong format"}
+// 		}
 
-	case "YN", "YNA":
-		switch v.Value.Type() {
-		case ballotValueString:
-			// The user answered with Y, N or A (or another invalid string).
-			if !allowedGlobal[v.Value.str] {
-				return InvalidVote("Global vote %s is not enabled", v.Value.str)
-			}
-			return voteIsValid
+// 	case "YN", "YNA":
+// 		switch v.Value.Type() {
+// 		case ballotValueString:
+// 			// The user answered with Y, N or A (or another invalid string).
+// 			if !allowedGlobal[v.Value.str] {
+// 				return InvalidVote("Global vote %s is not enabled", v.Value.str)
+// 			}
+// 			return voteIsValid
 
-		case ballotValueOptionString:
-			for optionID, yna := range v.Value.optionYNA {
-				if !allowedOptions[optionID] {
-					return InvalidVote("Option_id %d does not belong to the poll", optionID)
-				}
+// 		case ballotValueOptionString:
+// 			for optionID, yna := range v.Value.optionYNA {
+// 				if !allowedOptions[optionID] {
+// 					return InvalidVote("Option_id %d does not belong to the poll", optionID)
+// 				}
 
-				if yna != "Y" && yna != "N" && (yna != "A" || poll.method != "YNA") {
-					// Valid that given data matches poll method.
-					return InvalidVote("Data for option %d does not fit the poll method.", optionID)
-				}
-			}
-			return voteIsValid
+// 				if yna != "Y" && yna != "N" && (yna != "A" || poll.method != "YNA") {
+// 					// Valid that given data matches poll method.
+// 					return InvalidVote("Data for option %d does not fit the poll method.", optionID)
+// 				}
+// 			}
+// 			return voteIsValid
 
-		default:
-			return InvalidVote("Your vote has a wrong format")
-		}
+// 		default:
+// 			return InvalidVote("Your vote has a wrong format")
+// 		}
 
-	default:
-		return InvalidVote("Your vote has a wrong format")
-	}
-}
+// 	default:
+// 		return InvalidVote("Your vote has a wrong format")
+// 	}
+// }
 
 // voteData is the data a user sends as his vote.
 type ballotValue struct {

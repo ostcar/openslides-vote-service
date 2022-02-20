@@ -113,6 +113,7 @@ func handleStop(mux *http.ServeMux, stop stopper) {
 				return
 			}
 
+			fmt.Println("Original:", buf.String())
 			if err := convert4_0(w, buf); err != nil {
 				handleError(w, err, true)
 				return

@@ -127,6 +127,8 @@ func (s *Store) ClearPoll(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// TODO: ignore, when files do not exist.
+
 	if err := os.Remove(s.keyFile(id)); err != nil {
 		return fmt.Errorf("deleting key file: %w", err)
 	}

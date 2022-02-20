@@ -64,6 +64,9 @@ func (c Crypto) Decrypt(privateKey []byte, ciphertext []byte) ([]byte, error) {
 		return nil, fmt.Errorf("invalid cipher")
 	}
 
+	fmt.Println("key:", privateKey)
+	fmt.Println("cipher:", ciphertext)
+
 	ephemeralPublicKey := ciphertext[:pubKeySize]
 	nonce := ciphertext[pubKeySize : pubKeySize+nonceSize]
 

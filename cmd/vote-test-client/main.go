@@ -27,16 +27,20 @@ func run() error {
 		return fmt.Errorf("reading poll key file: %w", err)
 	}
 
-	civer, err := crypto.Encrypt(rand.Reader, key, []byte(`"Y"`))
+	fmt.Println("key:", key)
+
+	cipher, err := crypto.Encrypt(rand.Reader, key, []byte(`"Y"`))
 	if err != nil {
 		return fmt.Errorf("encrypting vote: %w", err)
 	}
+
+	fmt.Println("cipher:", cipher)
+
 	vote := struct {
 		Value []byte `json:"value"`
 	}{
-		civer,
+		cipher,
 	}
-
 	encoded, err := json.Marshal(vote)
 	if err != nil {
 		return fmt.Errorf("marshal vote: %w", err)
