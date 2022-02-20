@@ -41,9 +41,9 @@ LABEL org.opencontainers.image.description="The OpenSlides Vote Service handles 
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.source="https://github.com/OpenSlides/openslides-vote-service"
 
-COPY --from=builder /root/vote .
+COPY --from=builder /root/vote-service .
 EXPOSE 9013
 ENV MESSAGING redis
 ENV AUTH ticket
 
-ENTRYPOINT ["/vote"]
+ENTRYPOINT ["/vote-service"]
