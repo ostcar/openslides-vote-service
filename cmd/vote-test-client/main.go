@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -20,12 +19,12 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("Usage: %s BASE64_KEY", os.Args[0])
+		return fmt.Errorf("Usage: %s POLL_KEY_FILE", os.Args[0])
 	}
 
-	key, err := base64.StdEncoding.DecodeString(os.Args[1])
+	key, err := os.ReadFile(os.Args[1])
 	if err != nil {
-		return fmt.Errorf("decoding key: %w", err)
+		return fmt.Errorf("reading poll key file: %w", err)
 	}
 
 	civer, err := crypto.Encrypt(rand.Reader, key, []byte(`"Y"`))

@@ -94,6 +94,7 @@ type grpcServer struct {
 }
 
 func (s grpcServer) Start(ctx context.Context, req *StartRequest) (*StartResponse, error) {
+	log.Println("Start request")
 	pubKey, pubKeySig, err := s.decrypt.Start(ctx, req.Id)
 	if err != nil {
 		return nil, fmt.Errorf("starting vote: %w", err)
@@ -106,6 +107,7 @@ func (s grpcServer) Start(ctx context.Context, req *StartRequest) (*StartRespons
 }
 
 func (s grpcServer) Stop(ctx context.Context, req *StopRequest) (*StopResponse, error) {
+	log.Println("Stop request")
 	decrypted, signature, err := s.decrypt.Stop(ctx, req.Id, req.Votes)
 	if err != nil {
 		return nil, fmt.Errorf("stopping vote: %w", err)
@@ -118,6 +120,7 @@ func (s grpcServer) Stop(ctx context.Context, req *StopRequest) (*StopResponse, 
 }
 
 func (s grpcServer) Clear(ctx context.Context, req *ClearRequest) (*ClearResponse, error) {
+	log.Println("Clear request")
 	err := s.decrypt.Clear(ctx, req.Id)
 	if err != nil {
 		return nil, fmt.Errorf("clearing vote: %w", err)

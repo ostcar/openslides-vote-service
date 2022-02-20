@@ -44,7 +44,7 @@ func run(ctx context.Context) error {
 
 	decrypter := decrypt.New(cr, st)
 
-	if err := grpc.RunServer(ctx, decrypter, "localhost:9014"); err != nil {
+	if err := grpc.RunServer(ctx, decrypter, ":9014"); err != nil {
 		return fmt.Errorf("running grpc server: %w", err)
 	}
 

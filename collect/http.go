@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -42,7 +43,8 @@ type starter interface {
 
 func handleStart(mux *http.ServeMux, start starter) {
 	mux.HandleFunc(
-		httpPathInternal+"/start",
+		// TODO: change this to start. "create" is only used 4.0
+		httpPathInternal+"/create",
 		func(w http.ResponseWriter, r *http.Request) {
 			log.Info("Receive start request: %v", r)
 			w.Header().Set("Content-Type", "application/json")
@@ -103,12 +105,48 @@ func handleStop(mux *http.ServeMux, stop stopper) {
 				return
 			}
 
-			if err := stop.Stop(r.Context(), id, w); err != nil {
+			// TODO: Remove buf and convert4_0
+			buf := new(bytes.Buffer)
+
+			if err := stop.Stop(r.Context(), id, buf); err != nil {
+				handleError(w, err, true)
+				return
+			}
+
+			if err := convert4_0(w, buf); err != nil {
 				handleError(w, err, true)
 				return
 			}
 		},
 	)
+}
+
+func convert4_0(w io.Writer, r io.Reader) error {
+	var newContent struct {
+		Votes struct {
+			Votes []json.RawMessage `json:"votes"`
+		} `json:"votes"`
+		Signature []byte `json:"signature"`
+		Users     []int  `json:"user_ids"`
+	}
+
+	if err := json.NewDecoder(r).Decode(&newContent); err != nil {
+		return fmt.Errorf("decoding content: %w", err)
+	}
+
+	oldContent := struct {
+		Votes []json.RawMessage `json:"votes"`
+		Users []int             `json:"user_ids"`
+	}{
+		newContent.Votes.Votes,
+		newContent.Users,
+	}
+
+	if err := json.NewEncoder(w).Encode(oldContent); err != nil {
+		return fmt.Errorf("encoding content: %w", err)
+	}
+
+	return nil
 }
 
 type clearer interface {
