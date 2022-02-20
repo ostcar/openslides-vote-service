@@ -8,6 +8,9 @@ RUN go mod download
 
 COPY cmd cmd
 COPY internal internal
+COPY collect collect
+COPY decrypt decrypt
+COPY backends backends
 
 # Build service in seperate stage.
 FROM base as builder
