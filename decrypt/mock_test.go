@@ -33,6 +33,7 @@ func (c cryptoMock) Sign(value []byte) ([]byte, error) {
 	return []byte(fmt.Sprintf("sig:%s", value)), nil
 }
 
+// TODO: Implement correct errors from interface
 type StoreMock struct {
 	keys       map[string][]byte
 	signatures map[string][]byte

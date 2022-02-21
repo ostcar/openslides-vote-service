@@ -60,10 +60,12 @@ func Run(ctx context.Context, environment []string, getSecret func(name string) 
 
 	var decrypter collect.Decrypter
 	if keyFile := env["VOTE_DECRYPT_KEY_FILE"]; keyFile == "" {
-		d, err := grpc.NewClient(env["VOTE_DECRYPT_SERVICE"])
+		d, close, err := grpc.NewClient(env["VOTE_DECRYPT_SERVICE"])
 		if err != nil {
 			return fmt.Errorf("connection to vote decrypt service cia grpc: %w", err)
 		}
+		defer close()
+
 		decrypter = d
 		log.Info("connect to external vote decrypt service via grpc")
 

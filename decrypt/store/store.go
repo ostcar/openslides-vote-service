@@ -1,12 +1,15 @@
 package store
 
 import (
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"os"
 	"path"
 	"strings"
 	"sync"
+
+	"github.com/OpenSlides/openslides-vote-service/decrypt/errorcode"
 )
 
 // Store implements the decrypt.Store interface by writing the data to files.
@@ -18,6 +21,9 @@ import (
 // For each poll, two files are created. `POLLID_key` that contains the private
 // key for the poll and `POLLID_hash` the contains the hash of the first stop
 // request.
+//
+// TODO: Think about timing attacks when files do not exist or have wrong
+// content.
 type Store struct {
 	mu sync.Mutex
 
@@ -31,22 +37,10 @@ func New(path string) *Store {
 	}
 }
 
-func (s *Store) keyFile(id string) string {
-	// TODO: id has to be a valid file path
-	id = strings.ReplaceAll(id, "/", "_")
-	return path.Join(s.path, id+"_key")
-}
-
-func (s *Store) hashFile(id string) string {
-	// TODO: id has to be a valid file path
-	id = strings.ReplaceAll(id, "/", "_")
-	return path.Join(s.path, id+"_hash")
-}
-
 // SaveKey stores the private key.
 //
 // Has to return an error, if a key already exists.
-func (s *Store) SaveKey(id string, key []byte) (err error) {
+func (s *Store) SaveKey(id string, key []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -56,7 +50,9 @@ func (s *Store) SaveKey(id string, key []byte) (err error) {
 
 	f, err := os.OpenFile(s.keyFile(id), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0400)
 	if err != nil {
-		// TODO: better error handeling if file already existed.
+		if errors.Is(err, os.ErrExist) {
+			return errorcode.Exist
+		}
 		return fmt.Errorf("create file: %w", err)
 	}
 
@@ -76,14 +72,14 @@ func (s *Store) SaveKey(id string, key []byte) (err error) {
 // LoadKey returns the private key from the store.
 //
 // If the poll is unknown return (nil, nil)
-func (s *Store) LoadKey(id string) (key []byte, err error) {
+func (s *Store) LoadKey(id string) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	key, err = os.ReadFile(s.keyFile(id))
+	key, err := os.ReadFile(s.keyFile(id))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
+			return nil, errorcode.NotExist
 		}
 		return nil, fmt.Errorf("reading key file: %w", err)
 	}
@@ -95,17 +91,24 @@ func (s *Store) LoadKey(id string) (key []byte, err error) {
 // poll. Saves the signature for future calls.
 //
 // Has to return an error if the id is unknown in the store.
-func (s *Store) ValidateSignature(id string, hash []byte) (err error) {
+func (s *Store) ValidateSignature(id string, hash []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if _, err := os.Stat(s.keyFile(id)); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return errorcode.NotExist
+		}
+
 		return fmt.Errorf("checking key file: %w", err)
 	}
 
 	f, err := os.OpenFile(s.hashFile(id), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0400)
 	if err != nil {
-		// TODO: if file already exists, check the hash.
+		if errors.Is(err, os.ErrExist) {
+			return s.checkHash(id, hash)
+		}
+
 		return fmt.Errorf("create file: %w", err)
 	}
 
@@ -122,20 +125,41 @@ func (s *Store) ValidateSignature(id string, hash []byte) (err error) {
 	return nil
 }
 
+func (s *Store) checkHash(id string, hash []byte) error {
+	content, err := os.ReadFile(s.hashFile(id))
+	if err != nil {
+		return fmt.Errorf("reading file content: %v", err)
+	}
+
+	if subtle.ConstantTimeCompare(hash, content) != 1 {
+		return errorcode.Invalid
+	}
+
+	return nil
+}
+
 // ClearPoll removes all data for the poll.
 func (s *Store) ClearPoll(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// TODO: ignore, when files do not exist.
-
-	if err := os.Remove(s.keyFile(id)); err != nil {
+	if err := os.Remove(s.keyFile(id)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("deleting key file: %w", err)
 	}
 
-	if err := os.Remove(s.hashFile(id)); err != nil {
+	if err := os.Remove(s.hashFile(id)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("deleting hash file: %w", err)
 	}
 
 	return nil
+}
+
+func (s *Store) keyFile(id string) string {
+	id = strings.ReplaceAll(id, "/", "_")
+	return path.Join(s.path, id+"_key")
+}
+
+func (s *Store) hashFile(id string) string {
+	id = strings.ReplaceAll(id, "/", "_")
+	return path.Join(s.path, id+"_hash")
 }

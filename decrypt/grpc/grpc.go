@@ -8,6 +8,8 @@ import (
 
 	"github.com/OpenSlides/openslides-vote-service/decrypt"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // RunServer runs a grpc server on the given addr until ctx is done.
@@ -39,24 +41,22 @@ func RunServer(ctx context.Context, decrypt *decrypt.Decrypt, addr string) error
 	return nil
 }
 
-// Client holds the connection to a server
+// Client holds the connection to a decrypt server.
 type Client struct {
 	decryptClient DecryptClient
 }
 
 // NewClient creates a connection to a decrypt grpc server and wrapps then
 // into a decrypt.crypto interface.
-func NewClient(addr string) (*Client, error) {
+func NewClient(addr string) (*Client, func() error, error) {
 	// TODO: use secure connection
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
-		return nil, fmt.Errorf("creating connection to decrypt service: %w", err)
+		return nil, nil, fmt.Errorf("creating connection to decrypt service: %w", err)
 	}
 
-	// TODO: Close conn
-
 	decrypter := NewDecryptClient(conn)
-	return &Client{decryptClient: decrypter}, nil
+	return &Client{decryptClient: decrypter}, conn.Close, nil
 }
 
 // Start calls the Start grpc message.
@@ -88,16 +88,24 @@ func (c *Client) Clear(ctx context.Context, pollID string) error {
 	return nil
 }
 
-// TODO: wrap all errors so not information is leaked.
 type grpcServer struct {
 	decrypt *decrypt.Decrypt
+}
+
+// grpcError converts an error to a grpc error.
+func (s grpcServer) grpcError(err error) error {
+	// TODO: Set the logger on initialization.
+	log.Printf("GRPC: %v", err)
+
+	// currently, all errors are internal
+	return status.Error(codes.Internal, "Ups, someting went wrong!")
 }
 
 func (s grpcServer) Start(ctx context.Context, req *StartRequest) (*StartResponse, error) {
 	log.Println("Start request")
 	pubKey, pubKeySig, err := s.decrypt.Start(ctx, req.Id)
 	if err != nil {
-		return nil, fmt.Errorf("starting vote: %w", err)
+		return nil, s.grpcError(fmt.Errorf("starting vote: %w", err))
 	}
 
 	return &StartResponse{
@@ -110,7 +118,7 @@ func (s grpcServer) Stop(ctx context.Context, req *StopRequest) (*StopResponse, 
 	log.Println("Stop request")
 	decrypted, signature, err := s.decrypt.Stop(ctx, req.Id, req.Votes)
 	if err != nil {
-		return nil, fmt.Errorf("stopping vote: %w", err)
+		return nil, s.grpcError(fmt.Errorf("stopping vote: %w", err))
 	}
 
 	return &StopResponse{
@@ -123,7 +131,7 @@ func (s grpcServer) Clear(ctx context.Context, req *ClearRequest) (*ClearRespons
 	log.Println("Clear request")
 	err := s.decrypt.Clear(ctx, req.Id)
 	if err != nil {
-		return nil, fmt.Errorf("clearing vote: %w", err)
+		return nil, s.grpcError(fmt.Errorf("clearing vote: %w", err))
 	}
 
 	return new(ClearResponse), nil

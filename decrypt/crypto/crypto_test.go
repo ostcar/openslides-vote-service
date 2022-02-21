@@ -1,7 +1,6 @@
 package crypto_test
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"testing"
 
@@ -17,8 +16,8 @@ func TestCreatePollKey(t *testing.T) {
 		t.Fatalf("CreatePollKey: %v", err)
 	}
 
-	if key == nil || !bytes.Equal(key, make([]byte, 32)) {
-		t.Errorf("wrong poll key")
+	if len(key) != 32 {
+		t.Errorf("created key is not valid")
 	}
 }
 
@@ -30,7 +29,7 @@ func TestPublicPollKey(t *testing.T) {
 		t.Fatalf("PublicPollKey: %v", err)
 	}
 
-	if !ed25519.Verify(mockMainKey().Public().(ed25519.PublicKey), pub, sig) {
+	if !ed25519.Verify(ed25519.NewKeyFromSeed(mockMainKey()).Public().(ed25519.PublicKey), pub, sig) {
 		t.Errorf("signature does not match public key")
 	}
 }
@@ -71,7 +70,7 @@ func TestSign(t *testing.T) {
 		t.Fatalf("signing: %v", err)
 	}
 
-	if !ed25519.Verify(mockMainKey().Public().(ed25519.PublicKey), data, sig) {
+	if !ed25519.Verify(ed25519.NewKeyFromSeed(mockMainKey()).Public().(ed25519.PublicKey), data, sig) {
 		t.Errorf("signature does not match public key")
 	}
 }
@@ -80,8 +79,8 @@ func mockPollKey() []byte {
 	return make([]byte, curve25519.PointSize)
 }
 
-func mockMainKey() ed25519.PrivateKey {
-	return ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
+func mockMainKey() []byte {
+	return make([]byte, 32)
 }
 
 type randomMock struct{}

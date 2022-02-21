@@ -23,6 +23,7 @@ type Decrypt struct {
 }
 
 // New returns the initialized decrypt component.
+// TODO: Limit allowed chars to id: only a-zA-Z0-9 and /
 func New(crypto Crypto, store Store, options ...Option) *Decrypt {
 	d := Decrypt{
 		crypto:         crypto,
@@ -55,8 +56,8 @@ func (d *Decrypt) Start(ctx context.Context, pollID string) (pubKey []byte, pubK
 		if err != nil {
 			return nil, nil, fmt.Errorf("creating poll key: %w", err)
 		}
-		pollKey = key
 
+		pollKey = key
 		if err := d.store.SaveKey(pollID, key); err != nil {
 			return nil, nil, fmt.Errorf("saving poll key: %w", err)
 		}
@@ -202,7 +203,7 @@ func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byt
 // Crypto implements all required cryptographic functions.
 type Crypto interface {
 	// CreatePollKey creates a new keypair for a poll.
-	CreatePollKey() (key []byte, err error)
+	CreatePollKey() ([]byte, error)
 
 	// PublicPollKey returns the public poll key and the signature for a given key.
 	PublicPollKey(key []byte) (pubKey []byte, pubKeySig []byte, err error)
@@ -218,20 +219,25 @@ type Crypto interface {
 type Store interface {
 	// SaveKey stores the private key.
 	//
-	// Has to return an error, if a key already exists.
+	// Has to return an error `errorcode.Exist` if the key is already known.
 	SaveKey(id string, key []byte) error
 
 	// LoadKey returns the private key from the store.
 	//
-	// If the poll is unknown return (nil, nil)
+	// If the poll is unknown return `errorcode.NotExist`
 	LoadKey(id string) (key []byte, err error)
 
 	// ValidateSignature makes sure, that no other signature is saved for a
 	// poll. Saves the signature for future calls.
 	//
-	// Has to return an error if the id is unknown in the store.
+	// Has to return `errorcode.Invalid` if the hash differs from a privious
+	// call.
+	//
+	// Has to return `errorcode.NotExist` when the id does not exist.
 	ValidateSignature(id string, hash []byte) error
 
 	// ClearPoll removes all data for the poll.
+	//
+	// Does not return an error if poll does not exist.
 	ClearPoll(id string) error
 }
