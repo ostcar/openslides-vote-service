@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"math/big"
 	"runtime"
 	"sync"
+
+	"github.com/OpenSlides/openslides-vote-service/decrypt/errorcode"
 )
 
 // Decrypt holds the internal state of the decrypt component.
@@ -17,7 +20,7 @@ type Decrypt struct {
 	crypto Crypto
 	store  Store
 
-	maxVotes       int
+	maxVotes       int // maximum votes per poll.
 	decryptWorkers int
 	random         io.Reader
 }
@@ -40,7 +43,7 @@ func New(crypto Crypto, store Store, options ...Option) *Decrypt {
 	return &d
 }
 
-// Start starts the poll with specific data.
+// Start starts the poll. Returns a public poll key.
 //
 // It saves the poll meta data and generates a cryptographic key and returns the
 // public key.
@@ -48,10 +51,10 @@ func (d *Decrypt) Start(ctx context.Context, pollID string) (pubKey []byte, pubK
 	// TODO: Load Key and CreatePoll Key have probably be atomic.
 	pollKey, err := d.store.LoadKey(pollID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("loading poll key: %w", err)
-	}
+		if !errors.Is(err, errorcode.NotExist) {
+			return nil, nil, fmt.Errorf("loading poll key: %w", err)
+		}
 
-	if pollKey == nil {
 		key, err := d.crypto.CreatePollKey()
 		if err != nil {
 			return nil, nil, fmt.Errorf("creating poll key: %w", err)
@@ -79,15 +82,11 @@ func (d *Decrypt) Stop(ctx context.Context, pollID string, voteList [][]byte) (d
 		return nil, nil, fmt.Errorf("loading poll key: %w", err)
 	}
 
-	if pollKey == nil {
-		return nil, nil, fmt.Errorf("unknown poll")
-	}
-
 	if len(voteList) > d.maxVotes {
-		return nil, nil, fmt.Errorf("received %d votes, only %d votes supported", len(voteList), d.maxVotes)
+		return nil, nil, fmt.Errorf("received %d votes, only %d votes supported: %w", len(voteList), d.maxVotes, errorcode.Invalid)
 	}
 
-	decrypted, err := d.decryptVotes(ctx, pollKey, voteList)
+	decrypted, err := d.decryptVotes(ctx, pollKey, voteList, pollID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("decrypting votes: %w", err)
 	}
@@ -138,7 +137,7 @@ func randInt(source io.Reader, n int) (int, error) {
 	return int(r.Int64()), nil
 }
 
-func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byte) ([]json.RawMessage, error) {
+func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byte, pollID string) ([]json.RawMessage, error) {
 	// TODO: Listen on ctx.Done()
 
 	// Read votes from voteList in random order.
@@ -170,16 +169,9 @@ func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byt
 			for vote := range voteChan {
 				decrypted, err := d.crypto.Decrypt(key, vote)
 				if err != nil {
-					// TODO: Handle error
-					vote := struct {
-						Error string `json:"error"`
-					}{
-						fmt.Sprintf("error decrypting: %v", err),
-					}
-					decrypted, _ = json.Marshal(vote)
+					decrypted = []byte(`{"error":"decrypt"}`)
 				}
 
-				// TODO:Check poll ID
 				decryptedChan <- decrypted
 			}
 		}()

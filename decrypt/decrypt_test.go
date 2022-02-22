@@ -2,64 +2,153 @@ package decrypt_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/OpenSlides/openslides-vote-service/decrypt"
+	"github.com/OpenSlides/openslides-vote-service/decrypt/errorcode"
 )
 
+// TODO: test concurency.
+
 func TestStart(t *testing.T) {
-	crypto := cryptoMock{}
+	cr := cryptoMock{}
 	store := NewStoreMock()
-	d := decrypt.New(&crypto, store)
+	d := decrypt.New(cr, store)
 
-	pubKey, pubKeySig, err := d.Start(context.Background(), "test/1")
-	if err != nil {
-		t.Fatalf("start returned: %v", err)
-	}
+	t.Run("first call", func(t *testing.T) {
+		pubKey, pubKeySig, err := d.Start(context.Background(), "test/1")
+		if err != nil {
+			t.Fatalf("start returned: %v", err)
+		}
 
-	if string(pubKey) != "pollPubKey" {
-		t.Errorf("start returned `%s`, expected `pollPubKey`", pubKey)
-	}
+		if string(pubKey) != "pollPubKey" {
+			t.Errorf("start returned `%v`, expected `pollPubKey`", pubKey)
+		}
 
-	if string(pubKeySig) != "pollKeySig" {
-		t.Errorf("start returned `%s`, expected `pollKeySig`", pubKeySig)
-	}
+		if string(pubKeySig) != "pollKeySig" {
+			t.Errorf("start returned `%v`, expected `pollKeySig`", pubKeySig)
+		}
+	})
 
-	// TODO: test error cases
+	t.Run("second call", func(t *testing.T) {
+		pubKey, pubKeySig, err := d.Start(context.Background(), "test/1")
+		if err != nil {
+			t.Fatalf("start returned: %v", err)
+		}
+
+		if string(pubKey) != "pollPubKey" {
+			t.Errorf("start returned `%s`, expected `pollPubKey`", pubKey)
+		}
+
+		if string(pubKeySig) != "pollKeySig" {
+			t.Errorf("start returned `%s`, expected `pollKeySig`", pubKeySig)
+		}
+
+	})
 }
 
 func TestStop(t *testing.T) {
-	crypto := cryptoMock{}
-	store := NewStoreMock()
-	d := decrypt.New(&crypto, store, decrypt.WithRandomSource(readerMock{}))
+	cr := cryptoMock{}
 
-	if _, _, err := d.Start(context.Background(), "test/1"); err != nil {
-		t.Fatalf("start: %v", err)
-	}
+	t.Run("valid", func(t *testing.T) {
+		store := NewStoreMock()
+		d := decrypt.New(cr, store, decrypt.WithRandomSource(randomMock{}))
 
-	votes := [][]byte{
-		[]byte(`enc:{"poll_id":"test/1","votes":"Y"}`),
-		[]byte(`enc:{"poll_id":"test/1","votes":"N"}`),
-		[]byte(`enc:{"poll_id":"test/1","votes":"A"}`),
-	}
+		if _, _, err := d.Start(context.Background(), "test/1"); err != nil {
+			t.Fatalf("start: %v", err)
+		}
 
-	content, signature, err := d.Stop(context.Background(), "test/1", votes)
-	if err != nil {
-		t.Errorf("stop: %v", err)
-	}
+		votes := [][]byte{
+			[]byte(`enc:"Y"`),
+			[]byte(`enc:"N"`),
+			[]byte(`enc:"A"`),
+		}
 
-	if string(signature) != "sig:"+string(content) {
-		t.Errorf("got signature %s, expected signature %s", signature, "sig:"+string(content))
-	}
+		content, signature, err := d.Stop(context.Background(), "test/1", votes)
+		if err != nil {
+			t.Errorf("stop: %v", err)
+		}
 
-	expected := `{"id":"test/1","votes":[{"poll_id":"test/1","votes":"Y"},{"poll_id":"test/1","votes":"A"},{"poll_id":"test/1","votes":"N"}]}`
-	if string(content) != expected {
-		t.Errorf("got %s, expected %s", content, expected)
-	}
+		if string(signature) != "sig:"+string(content) {
+			t.Errorf("got signature %s, expected signature %s", signature, "sig:"+string(content))
+		}
 
-	// TODO: Test errors
-	// * Wrong poll_id
-	// * wrong decryption key
+		expected := `{"id":"test/1","votes":["Y","A","N"]}`
+		if string(content) != expected {
+			t.Errorf("got %s, expected %s", content, expected)
+		}
+	})
+
+	t.Run("decrypt error", func(t *testing.T) {
+		store := NewStoreMock()
+		d := decrypt.New(cr, store, decrypt.WithRandomSource(randomMock{}))
+
+		if _, _, err := d.Start(context.Background(), "test/1"); err != nil {
+			t.Fatalf("start: %v", err)
+		}
+
+		votes := [][]byte{
+			[]byte(`enc:"Y"`),
+			[]byte(`encwrong:"N"`),
+			[]byte(`enc:"A"`),
+		}
+
+		content, signature, err := d.Stop(context.Background(), "test/1", votes)
+		if err != nil {
+			t.Errorf("stop: %v", err)
+		}
+
+		if string(signature) != "sig:"+string(content) {
+			t.Errorf("got signature %s, expected signature %s", signature, "sig:"+string(content))
+		}
+
+		expected := `{"id":"test/1","votes":["Y","A",{"error":"decrypt"}]}`
+		if string(content) != expected {
+			t.Errorf("got %s, expected %s", content, expected)
+		}
+	})
+
+	t.Run("Not started", func(t *testing.T) {
+		store := NewStoreMock()
+		d := decrypt.New(cr, store, decrypt.WithRandomSource(randomMock{}))
+
+		votes := [][]byte{
+			[]byte(`enc:"Y"`),
+			[]byte(`enc:"N"`),
+			[]byte(`enc:"A"`),
+		}
+
+		_, _, err := d.Stop(context.Background(), "test/1", votes)
+		if !errors.Is(err, errorcode.NotExist) {
+			t.Errorf("stop returned `%v` expected `%v`", err, errorcode.NotExist)
+		}
+	})
+
+	t.Run("To many votes", func(t *testing.T) {
+		store := NewStoreMock()
+		d := decrypt.New(
+			cr,
+			store,
+			decrypt.WithRandomSource(randomMock{}),
+			decrypt.WithMaxVotes(2),
+		)
+
+		if _, _, err := d.Start(context.Background(), "test/1"); err != nil {
+			t.Fatalf("start: %v", err)
+		}
+
+		votes := [][]byte{
+			[]byte(`enc:"Y"`),
+			[]byte(`enc:"N"`),
+			[]byte(`enc:"A"`),
+		}
+
+		_, _, err := d.Stop(context.Background(), "test/1", votes)
+		if !errors.Is(err, errorcode.Invalid) {
+			t.Errorf("stop returned `%v` expected `%v`", err, errorcode.Invalid)
+		}
+	})
 }
 
 // TODO: test clear

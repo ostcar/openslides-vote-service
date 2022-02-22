@@ -13,3 +13,10 @@ func WithRandomSource(r io.Reader) Option {
 		d.random = r
 	}
 }
+
+// WithMaxVotes sets the number of maximum votes, that are supported.
+func WithMaxVotes(maxVotes int) Option {
+	return func(d *Decrypt) {
+		d.maxVotes = maxVotes
+	}
+}
