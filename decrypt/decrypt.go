@@ -20,20 +20,24 @@ type Decrypt struct {
 	crypto Crypto
 	store  Store
 
-	maxVotes       int // maximum votes per poll.
-	decryptWorkers int
-	random         io.Reader
+	maxVotes          int // maximum votes per poll.
+	decryptWorkers    int
+	random            io.Reader
+	listToContent     func(pollID string, decrypted [][]byte) ([]byte, error) // See WithListToContent()
+	decryptErrorValue []byte                                                  // Value to use if a vote can not be decrypted.
 }
 
 // New returns the initialized decrypt component.
 // TODO: Limit allowed chars to id: only a-zA-Z0-9 and /
 func New(crypto Crypto, store Store, options ...Option) *Decrypt {
 	d := Decrypt{
-		crypto:         crypto,
-		store:          store,
-		decryptWorkers: runtime.GOMAXPROCS(-1),
-		random:         rand.Reader,
-		maxVotes:       math.MaxInt,
+		crypto:            crypto,
+		store:             store,
+		decryptWorkers:    runtime.GOMAXPROCS(-1),
+		random:            rand.Reader,
+		maxVotes:          math.MaxInt,
+		listToContent:     jsonListToContent,
+		decryptErrorValue: []byte(`{"error":"decrypt"}`),
 	}
 
 	for _, o := range options {
@@ -91,17 +95,9 @@ func (d *Decrypt) Stop(ctx context.Context, pollID string, voteList [][]byte) (d
 		return nil, nil, fmt.Errorf("decrypting votes: %w", err)
 	}
 
-	content := struct {
-		ID    string            `json:"id"`
-		Votes []json.RawMessage `json:"votes"`
-	}{
-		pollID,
-		decrypted,
-	}
-
-	decryptedContent, err = json.Marshal(content)
+	decryptedContent, err = d.listToContent(pollID, decrypted)
 	if err != nil {
-		return nil, nil, fmt.Errorf("marshal decrypted content: %w", err)
+		return nil, nil, fmt.Errorf("creating content: %w", err)
 	}
 
 	signature, err = d.crypto.Sign(decryptedContent)
@@ -137,7 +133,7 @@ func randInt(source io.Reader, n int) (int, error) {
 	return int(r.Int64()), nil
 }
 
-func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byte, pollID string) ([]json.RawMessage, error) {
+func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byte, pollID string) ([][]byte, error) {
 	// TODO: Listen on ctx.Done()
 
 	// Read votes from voteList in random order.
@@ -169,7 +165,7 @@ func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byt
 			for vote := range voteChan {
 				decrypted, err := d.crypto.Decrypt(key, vote)
 				if err != nil {
-					decrypted = []byte(`{"error":"decrypt"}`)
+					decrypted = d.decryptErrorValue
 				}
 
 				decryptedChan <- decrypted
@@ -183,7 +179,7 @@ func (d *Decrypt) decryptVotes(ctx context.Context, key []byte, voteList [][]byt
 	}()
 
 	// Bundle decrypted votes.
-	decryptedList := make([]json.RawMessage, len(voteList))
+	decryptedList := make([][]byte, len(voteList))
 	var i int
 	for decrypted := range decryptedChan {
 		decryptedList[i] = decrypted
@@ -232,4 +228,26 @@ type Store interface {
 	//
 	// Does not return an error if poll does not exist.
 	ClearPoll(id string) error
+}
+
+func jsonListToContent(pollID string, decrypted [][]byte) ([]byte, error) {
+	votes := make([]json.RawMessage, len(decrypted))
+	for i, vote := range decrypted {
+		votes[i] = vote
+	}
+
+	content := struct {
+		ID    string            `json:"id"`
+		Votes []json.RawMessage `json:"votes"`
+	}{
+		pollID,
+		votes,
+	}
+
+	decryptedContent, err := json.Marshal(content)
+	if err != nil {
+		return nil, fmt.Errorf("marshal decrypted content: %w", err)
+	}
+
+	return decryptedContent, nil
 }

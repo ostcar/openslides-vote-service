@@ -20,3 +20,14 @@ func WithMaxVotes(maxVotes int) Option {
 		d.maxVotes = maxVotes
 	}
 }
+
+// WithListToContent takes a function that is used to create the content
+// returned from the Stop() call.
+//
+// The function taks an id and the randomized list of decrypted votes and
+// createa the output format.
+func WithListToContent(f func(id string, decrypted [][]byte) ([]byte, error)) Option {
+	return func(d *Decrypt) {
+		d.listToContent = f
+	}
+}

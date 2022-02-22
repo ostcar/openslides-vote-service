@@ -1,6 +1,7 @@
 package decrypt_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -147,6 +148,44 @@ func TestStop(t *testing.T) {
 		_, _, err := d.Stop(context.Background(), "test/1", votes)
 		if !errors.Is(err, errorcode.Invalid) {
 			t.Errorf("stop returned `%v` expected `%v`", err, errorcode.Invalid)
+		}
+	})
+
+	t.Run("Other content format", func(t *testing.T) {
+		listToContent := func(id string, decrypted [][]byte) ([]byte, error) {
+			return bytes.Join(decrypted, []byte(",")), nil
+		}
+
+		store := NewStoreMock()
+		d := decrypt.New(
+			cr,
+			store,
+			decrypt.WithRandomSource(randomMock{}),
+			decrypt.WithListToContent(listToContent),
+		)
+
+		if _, _, err := d.Start(context.Background(), "test/1"); err != nil {
+			t.Fatalf("start: %v", err)
+		}
+
+		votes := [][]byte{
+			[]byte(`enc:"Y"`),
+			[]byte(`enc:"N"`),
+			[]byte(`enc:"A"`),
+		}
+
+		content, signature, err := d.Stop(context.Background(), "test/1", votes)
+		if err != nil {
+			t.Errorf("stop: %v", err)
+		}
+
+		if string(signature) != "sig:"+string(content) {
+			t.Errorf("got signature %s, expected signature %s", signature, "sig:"+string(content))
+		}
+
+		expected := `"Y","A","N"`
+		if string(content) != expected {
+			t.Errorf("got %s, expected %s", content, expected)
 		}
 	})
 }
