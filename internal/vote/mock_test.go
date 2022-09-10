@@ -2,6 +2,8 @@ package vote_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/datastore"
@@ -44,4 +46,28 @@ func MustKey(in string) datastore.Key {
 		panic(err)
 	}
 	return k
+}
+
+type decrypterStub struct{}
+
+func (d *decrypterStub) Start(ctx context.Context, pollID string) (pubKey []byte, pubKeySig []byte, err error) {
+	return nil, nil, nil
+}
+
+func (d *decrypterStub) Stop(ctx context.Context, pollID string, voteList [][]byte) (decryptedContent, signature []byte, err error) {
+	votes := make([]json.RawMessage, len(voteList))
+	for i, vote := range voteList {
+		votes[i] = vote
+	}
+
+	decryptedContent, err = json.Marshal(votes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshal decrypted content: %w", err)
+	}
+
+	return decryptedContent, []byte("signature"), nil
+}
+
+func (d *decrypterStub) Clear(ctx context.Context, pollID string) error {
+	return nil
 }

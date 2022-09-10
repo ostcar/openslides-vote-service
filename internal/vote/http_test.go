@@ -18,9 +18,9 @@ type starterStub struct {
 	expectErr error
 }
 
-func (c *starterStub) Start(ctx context.Context, pollID int) error {
+func (c *starterStub) Start(ctx context.Context, pollID int) ([]byte, []byte, error) {
 	c.id = pollID
-	return c.expectErr
+	return nil, nil, c.expectErr
 }
 
 func TestHandleStart(t *testing.T) {
@@ -123,19 +123,22 @@ func TestHandleStart(t *testing.T) {
 }
 
 type stopperStub struct {
-	id           int
-	expectWriter string
-	expectErr    error
+	id        int
+	expectErr error
+
+	expectVotes       json.RawMessage
+	expectedSignature []byte
+	expectedUserIDs   []int
 }
 
-func (s *stopperStub) Stop(ctx context.Context, pollID int, w io.Writer) error {
+func (s *stopperStub) Stop(ctx context.Context, pollID int) (json.RawMessage, []byte, []int, error) {
 	s.id = pollID
 
 	if s.expectErr != nil {
-		return s.expectErr
+		return nil, nil, nil, s.expectErr
 	}
-	_, err := w.Write([]byte(s.expectWriter))
-	return err
+
+	return s.expectVotes, s.expectedSignature, s.expectedUserIDs, nil
 }
 
 func TestHandleStop(t *testing.T) {
@@ -164,7 +167,7 @@ func TestHandleStop(t *testing.T) {
 	})
 
 	t.Run("Valid", func(t *testing.T) {
-		stopper.expectWriter = "some text"
+		stopper.expectVotes = []byte(`"some values"`)
 
 		resp := httptest.NewRecorder()
 		mux.ServeHTTP(resp, httptest.NewRequest("POST", url+"?id=1", nil))
@@ -177,8 +180,9 @@ func TestHandleStop(t *testing.T) {
 			t.Errorf("Stopper was called with id %d, expected 1", stopper.id)
 		}
 
-		if resp.Body.String() != stopper.expectWriter {
-			t.Errorf("Got body `%s`, expected `%s`", resp.Body.String(), stopper.expectWriter)
+		expect := `{"votes":"some values","signature":null,"user_ids":[]}`
+		if trimed := strings.TrimSpace(resp.Body.String()); trimed != expect {
+			t.Errorf("Got body `%s`, expected `%s`", trimed, expect)
 		}
 	})
 

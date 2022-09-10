@@ -16,6 +16,7 @@ import (
 	"github.com/OpenSlides/openslides-vote-service/internal/backends/postgres"
 	"github.com/OpenSlides/openslides-vote-service/internal/backends/redis"
 	"github.com/OpenSlides/openslides-vote-service/internal/log"
+	"github.com/OpenSlides/vote-decrypt/grpc"
 )
 
 const authDebugKey = "auth-dev-key"
@@ -59,7 +60,13 @@ func Run(ctx context.Context, environment []string, getSecret func(name string) 
 		return fmt.Errorf("building backends: %w", err)
 	}
 
-	service := New(fastBackend, longBackend, ds)
+	decrypter, close, err := grpc.NewClient(env["VOTE_DECRYPT_SERVICE"])
+	if err != nil {
+		return fmt.Errorf("connection to vote decrypt service via grpc: %w", err)
+	}
+	defer close()
+
+	service := New(fastBackend, longBackend, ds, decrypter)
 
 	ticketProvider := func() (<-chan time.Time, func()) {
 		ticker := time.NewTicker(time.Second)
@@ -108,7 +115,6 @@ func Run(ctx context.Context, environment []string, getSecret func(name string) 
 // defaut values.
 func defaultEnv(environment []string) map[string]string {
 	env := map[string]string{
-		"VOTE_HOST":         "",
 		"VOTE_PORT":         "9013",
 		"VOTE_BACKEND_FAST": "redis",
 		"VOTE_BACKEND_LONG": "postgres",

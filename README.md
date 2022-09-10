@@ -169,8 +169,6 @@ Response:
 
 The Service uses the following environment variables:
 
-* `VOTE_HOST`: The device where the service starts. The default is am empty
-  string which starts the service on any device.
 * `VOTE_PORT`: The port the vote service listens on. The default is `9013`. 
 * `VOTE_BACKEND_FAST`: The backend used for fast polls. Possible backends are
   redis, postgres or memory. Default is `redis`.
