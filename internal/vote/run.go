@@ -142,6 +142,8 @@ func defaultEnv(environment []string) map[string]string {
 		"VOTE_DATABASE_PORT":          "5432",
 		"VOTE_DATABASE_NAME":          "vote",
 
+		"VOTE_DECRYPT_SERVICE": "localhost:9014",
+
 		"OPENSLIDES_DEVELOPMENT": "false",
 		"MAX_PARALLEL_KEYS":      "1000",
 		"DATASTORE_TIMEOUT":      "3s",
