@@ -2,6 +2,7 @@ package vote
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -147,13 +148,13 @@ func (v *Vote) Stop(ctx context.Context, pollID int) (json.RawMessage, []byte, [
 	votes := make([][]byte, len(ballots))
 	for i := range ballots {
 		var vote struct {
-			Value []byte `json:"value"` // Use []byte for base64 decoding.
+			Value json.RawMessage `json:"value"`
 		}
 		if err := json.Unmarshal(ballots[i], &vote); err != nil {
-			return nil, nil, nil, fmt.Errorf("decoding vote from backend: %w", err)
+			return nil, nil, nil, fmt.Errorf("decoding stored vote: %w", err)
 		}
 
-		votes[i] = vote.Value
+		votes[i] = []byte(base64.StdEncoding.EncodeToString(vote.Value))
 	}
 
 	qid, err := v.qualifiedID(ctx, ds, pollID)
