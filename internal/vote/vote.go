@@ -92,21 +92,25 @@ func (v *Vote) Start(ctx context.Context, pollID int) (pubkey []byte, pubKeySig 
 	}
 	log.Debug("Preload cache. Received keys: %v", recorder.Keys())
 
-	if poll.pollType == "crypt" {
-		qid, err := v.qualifiedID(ctx, ds, pollID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("building qualified id: %w", err)
-		}
-
-		pubkey, pubKeySig, err = v.decrypter.Start(ctx, qid)
-		if err != nil {
-			return nil, nil, fmt.Errorf("starting poll in decrypter: %w", err)
-		}
-	}
-
 	backend := v.backend(poll)
 	if err := backend.Start(ctx, pollID); err != nil {
 		return nil, nil, fmt.Errorf("starting poll in the backend: %w", err)
+	}
+
+	if poll.pollType != "cryptographic" {
+		return nil, nil, nil
+	}
+
+	// TODO: If something fails after this point, clear the poll from the backend!!
+
+	qid, err := v.qualifiedID(ctx, ds, pollID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("building qualified id: %w", err)
+	}
+
+	pubkey, pubKeySig, err = v.decrypter.Start(ctx, qid)
+	if err != nil {
+		return nil, nil, fmt.Errorf("starting poll in decrypter: %w", err)
 	}
 
 	return pubkey, pubKeySig, nil
@@ -136,7 +140,7 @@ func (v *Vote) Stop(ctx context.Context, pollID int) (json.RawMessage, []byte, [
 		return nil, nil, nil, fmt.Errorf("fetching vote objects: %w", err)
 	}
 
-	if poll.pollType != "crypt" {
+	if poll.pollType != "cryptographic" {
 		votes, err := ballotsToJSONList(ballots)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("encode ballots: %w", err)
