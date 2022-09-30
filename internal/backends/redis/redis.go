@@ -185,9 +185,6 @@ func (b *Backend) Stop(ctx context.Context, pollID int) ([][]byte, []int, error)
 		voteObjects = append(voteObjects, []byte(vote))
 	}
 
-	if log.IsDebug() {
-		log.Debug("Redis: Recieved %v", data)
-	}
 	sort.Ints(userIDs)
 	return voteObjects, userIDs, nil
 }

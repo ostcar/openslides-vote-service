@@ -2,7 +2,6 @@ package vote
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -152,13 +151,13 @@ func (v *Vote) Stop(ctx context.Context, pollID int) (json.RawMessage, []byte, [
 	votes := make([][]byte, len(ballots))
 	for i := range ballots {
 		var vote struct {
-			Value json.RawMessage `json:"value"`
+			Value []byte `json:"value"`
 		}
 		if err := json.Unmarshal(ballots[i], &vote); err != nil {
 			return nil, nil, nil, fmt.Errorf("decoding stored vote: %w", err)
 		}
 
-		votes[i] = []byte(base64.StdEncoding.EncodeToString(vote.Value))
+		votes[i] = vote.Value
 	}
 
 	qid, err := v.qualifiedID(ctx, ds, pollID)
@@ -209,6 +208,7 @@ func (v *Vote) Clear(ctx context.Context, pollID int) (err error) {
 		return fmt.Errorf("building qualified id: %w", err)
 	}
 
+	// TODO: Handle case that decrypter is not configured.
 	if err := v.decrypter.Clear(ctx, qid); err != nil {
 		return fmt.Errorf("clearing decrypter: %w", err)
 	}
