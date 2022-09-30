@@ -87,9 +87,16 @@ func handleStop(mux *http.ServeMux, stop stopper) {
 			}
 
 			votes, signature, userIDs, err := stop.Stop(r.Context(), id)
-
 			if err != nil {
 				handleError(w, err, true)
+				return
+			}
+
+			// Encode the votes object separatly to make it possible for the
+			// backend (python) to read its original value.
+			encodedVotes, err := json.Marshal(votes)
+			if err != nil {
+				handleError(w, fmt.Errorf("encoding votes: %w", err), true)
 				return
 			}
 
@@ -98,11 +105,11 @@ func handleStop(mux *http.ServeMux, stop stopper) {
 			}
 
 			out := struct {
-				Votes     json.RawMessage `json:"votes"`
-				Signature []byte          `json:"signature"`
-				Users     []int           `json:"user_ids"`
+				Votes     string `json:"votes"`
+				Signature []byte `json:"signature"`
+				Users     []int  `json:"user_ids"`
 			}{
-				votes,
+				string(encodedVotes),
 				signature,
 				userIDs,
 			}
