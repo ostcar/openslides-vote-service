@@ -166,6 +166,24 @@ Response:
 ```
 
 
+### Crypto Public Main Key
+
+The vote service can return the public main service from vote-decrypt. The key
+is decoded as base64.
+
+Example:
+
+```
+curl localhost:9013/internal/vote/public_main_key
+```
+
+Response:
+
+```
+dHR0dHR0dHR0ZWtmanRpd28zbmdrZGkxMjNuZmt3a3IK
+```
+
+
 ## Configuration
 
 ### Environment variables

@@ -79,3 +79,7 @@ func (d *decrypterStub) Stop(ctx context.Context, pollID string, voteList [][]by
 func (d *decrypterStub) Clear(ctx context.Context, pollID string) error {
 	return nil
 }
+
+func (d *decrypterStub) PublicMainKey(ctx context.Context) ([]byte, error) {
+	return []byte("pub_main_key"), nil
+}

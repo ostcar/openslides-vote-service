@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/OpenSlides/openslides-autoupdate-service v0.4.1-0.20221011084125-c050f958fb7a
-	github.com/OpenSlides/vote-decrypt v0.0.0-20221011083319-c23dc6261edb
+	github.com/OpenSlides/vote-decrypt v0.0.0-20221011104221-fba8e9917f05
 	github.com/gomodule/redigo v1.8.9
 	github.com/jackc/pgconn v1.13.0
 	github.com/jackc/pgx/v4 v4.17.2

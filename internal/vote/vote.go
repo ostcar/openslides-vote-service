@@ -18,6 +18,7 @@ type Decrypter interface {
 	Start(ctx context.Context, pollID string) (pubKey []byte, pubKeySig []byte, err error)
 	Stop(ctx context.Context, pollID string, voteList [][]byte) (decryptedContent, signature []byte, err error)
 	Clear(ctx context.Context, pollID string) error
+	PublicMainKey(ctx context.Context) ([]byte, error)
 }
 
 // Vote holds the state of the service.
@@ -536,6 +537,15 @@ func (v *Vote) VoteCount(ctx context.Context) (map[int]int, error) {
 		count[k] = v
 	}
 	return count, nil
+}
+
+// CryptoPublicMainKey returns the public main key from vote-decrypt.
+func (v *Vote) CryptoPublicMainKey(ctx context.Context) ([]byte, error) {
+	if v.decrypter == nil {
+		return nil, fmt.Errorf("decrypt service is not configured")
+	}
+
+	return v.decrypter.PublicMainKey(ctx)
 }
 
 // Backend is a storage for the poll options.

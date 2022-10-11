@@ -344,6 +344,31 @@ func handleVoteCount(mux *http.ServeMux, voteCounter voteCounter, eventer func()
 	)
 }
 
+type publicKeyer interface {
+	CryptoPublicMainKey(ctx context.Context) ([]byte, error)
+}
+
+func handlePublicMainKey(mux *http.ServeMux, keyer publicKeyer) {
+	mux.HandleFunc(
+		httpPathInternal+"/public_main_key",
+		func(w http.ResponseWriter, r *http.Request) {
+			log.Info("Receiving public main key request")
+			w.Header().Set("Content-Type", "application/json")
+
+			key, err := keyer.CryptoPublicMainKey(r.Context())
+			if err != nil {
+				handleError(w, err, true)
+				return
+			}
+
+			if err := json.NewEncoder(w).Encode(key); err != nil {
+				handleError(w, err, true)
+				return
+			}
+		},
+	)
+}
+
 func handleHealth(mux *http.ServeMux) {
 	mux.HandleFunc(
 		httpPathExternal+"/health",
