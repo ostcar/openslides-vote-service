@@ -383,7 +383,6 @@ func buildBackends(
 func parseDuration(s string) (time.Duration, error) {
 	sec, err := strconv.Atoi(s)
 	if err == nil {
-		// TODO External error
 		return time.Duration(sec) * time.Second, nil
 	}
 

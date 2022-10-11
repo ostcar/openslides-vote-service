@@ -100,7 +100,11 @@ func (v *Vote) Start(ctx context.Context, pollID int) (pubkey []byte, pubKeySig 
 		return nil, nil, nil
 	}
 
-	// TODO: If something fails after this point, clear the poll from the backend!!
+	defer func() {
+		if err != nil {
+			backend.Clear(ctx, pollID)
+		}
+	}()
 
 	qid, err := v.qualifiedID(ctx, ds, pollID)
 	if err != nil {
@@ -232,7 +236,10 @@ func (v *Vote) Clear(ctx context.Context, pollID int) (err error) {
 		return fmt.Errorf("building qualified id: %w", err)
 	}
 
-	// TODO: Handle case that decrypter is not configured.
+	if v.decrypter == nil {
+		return nil
+	}
+
 	if err := v.decrypter.Clear(ctx, qid); err != nil {
 		return fmt.Errorf("clearing decrypter: %w", err)
 	}
@@ -241,6 +248,8 @@ func (v *Vote) Clear(ctx context.Context, pollID int) (err error) {
 }
 
 // ClearAll removes all knowlage of all polls and the datastore-cache.
+//
+// This does not work for the vote decrypter.
 func (v *Vote) ClearAll(ctx context.Context) (err error) {
 	log.Debug("Receive clearAll event")
 	defer func() {
@@ -262,8 +271,6 @@ func (v *Vote) ClearAll(ctx context.Context) (err error) {
 	if err := v.longBackend.ClearAll(ctx); err != nil {
 		return fmt.Errorf("clearing long Backend: %w", err)
 	}
-
-	// TODO: clear decrypter.
 
 	return nil
 }
