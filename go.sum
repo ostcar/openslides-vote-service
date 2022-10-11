@@ -6,10 +6,10 @@ github.com/Microsoft/go-winio v0.6.0 h1:slsWYD/zyx7lCXoZVlvQrj0hPTM1HI4+v1sIda2y
 github.com/Microsoft/go-winio v0.6.0/go.mod h1:cTAf44im0RAYeL23bpB+fzCyDH2MJiz2BO69KH/soAE=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 h1:TngWCqHvy9oXAN6lEVMRuU21PR1EtLVZJmdB18Gu3Rw=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5/go.mod h1:lmUJ/7eu/Q8D7ML55dXQrVaamCz2vxCfdQBasLZfHKk=
-github.com/OpenSlides/openslides-autoupdate-service v0.4.1-0.20221005164901-ffcf46b28032 h1:lQFSlAEWV+L9i5RwGJseAnE9E770s0z26dgY23gJ/qE=
-github.com/OpenSlides/openslides-autoupdate-service v0.4.1-0.20221005164901-ffcf46b28032/go.mod h1:D9ZLCc8PXy17t8IloP9P4hiu7sE+EAL5AosWIhn3F2w=
-github.com/OpenSlides/vote-decrypt v0.0.0-20221001094451-b98cc229e7c2 h1:PnPoWgvAD/kTVdr6J0APtt9WWta26USaRxpTujck7ag=
-github.com/OpenSlides/vote-decrypt v0.0.0-20221001094451-b98cc229e7c2/go.mod h1:A/KCoDCEsIFtVLZ23Ldh15Vi85y2qR81544LxuKYlG4=
+github.com/OpenSlides/openslides-autoupdate-service v0.4.1-0.20221011084125-c050f958fb7a h1:hp1tZoVb4SiFz+3pgRHOk40D0l8Tjnndoiz/rf3B93o=
+github.com/OpenSlides/openslides-autoupdate-service v0.4.1-0.20221011084125-c050f958fb7a/go.mod h1:Ts4lLpMonxWxLLrlUq3Kzy4IDEl8vmW0Dwx3kNwDnz0=
+github.com/OpenSlides/vote-decrypt v0.0.0-20221011083319-c23dc6261edb h1:2GyawMBmh3Md8Ldi7lFsfJk3wNut12wmggWHe36BOuU=
+github.com/OpenSlides/vote-decrypt v0.0.0-20221011083319-c23dc6261edb/go.mod h1:rrD19LpkjiQK72mNbhKbyaOP4inuFuilYiZUVJ5ZgvA=
 github.com/cenkalti/backoff/v4 v4.1.3 h1:cFAlzYUlVYDysBEH2T5hyJZMh3+5+WCBvSnK6Q8UtC4=
 github.com/cenkalti/backoff/v4 v4.1.3/go.mod h1:scbssz8iZGpm3xbr14ovlUdkxfGXNInqkPWOWmG2CLw=
 github.com/checkpoint-restore/go-criu/v5 v5.3.0/go.mod h1:E/eQpaFtUKGOOSEBZgmKAcn+zUUwWxqcaKZlF54wK8E=
