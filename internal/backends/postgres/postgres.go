@@ -129,7 +129,7 @@ func (b *Backend) voteOnce(ctx context.Context, pollID int, userID int, object [
 			WHERE id = $1;
 			`
 			var stopped bool
-			var uIDs userIDs
+			var uIDs userIDList
 			log.Debug("SQL: `%s` (values: %d)", sql, pollID)
 			if err := tx.QueryRow(ctx, sql, pollID).Scan(&stopped, &uIDs); err != nil {
 				if errors.Is(err, pgx.ErrNoRows) {
@@ -250,7 +250,7 @@ func (b *Backend) stopOnce(ctx context.Context, pollID int) (objects [][]byte, u
 			FROM vote.poll
 			WHERE poll.id = $1;
 			`
-			var uIDs userIDs
+			var uIDs userIDList
 			if err := tx.QueryRow(ctx, sql, pollID).Scan(&uIDs); err != nil {
 				return fmt.Errorf("fetching poll data: %w", err)
 			}
@@ -300,11 +300,8 @@ func (b *Backend) ClearAll(ctx context.Context) error {
 
 // VotedPolls tells for a list of poll IDs if the given userID has already
 // voted.
-func (b *Backend) VotedPolls(ctx context.Context, pollIDs []int, userID int) (out map[int]bool, err error) {
+func (b *Backend) VotedPolls(ctx context.Context, pollIDs []int, userIDs []int) (map[int][]int, error) {
 	log.Debug("SQL: Begin voted polls")
-	defer func() {
-		log.Debug("SQL: voted polls returnes with error: %v", err)
-	}()
 
 	sql := `
 	SELECT id, user_ids
@@ -317,19 +314,25 @@ func (b *Backend) VotedPolls(ctx context.Context, pollIDs []int, userID int) (ou
 		return nil, fmt.Errorf("fetching user_ids from poll objects: %w", err)
 	}
 
-	out = make(map[int]bool, len(pollIDs))
+	out := make(map[int][]int, len(pollIDs))
 	for rows.Next() {
 		var pid int
-		var uIDs userIDs
+		var uIDs userIDList
 		if err := rows.Scan(&pid, &uIDs); err != nil {
-			return nil, fmt.Errorf("parsind row: %w", err)
+			return nil, fmt.Errorf("parsing row: %w", err)
 		}
-		out[pid] = uIDs.contains(int32(userID))
+		for _, userID := range userIDs {
+			if uIDs.contains(int32(userID)) {
+				out[pid] = append(out[pid], userID)
+			}
+		}
 	}
 
 	// Add values for non existing polls
 	for _, id := range pollIDs {
-		out[id] = out[id] || false
+		if _, ok := out[id]; !ok {
+			out[id] = nil
+		}
 	}
 	return out, nil
 }
@@ -376,9 +379,9 @@ func continueOnTransactionError(ctx context.Context, f func() error) error {
 	return err
 }
 
-type userIDs []int32
+type userIDList []int32
 
-func (u *userIDs) Scan(src interface{}) error {
+func (u *userIDList) Scan(src interface{}) error {
 	if src == nil {
 		*u = []int32{}
 		return nil
@@ -398,7 +401,7 @@ func (u *userIDs) Scan(src interface{}) error {
 	return nil
 }
 
-func (u userIDs) Value() (driver.Value, error) {
+func (u userIDList) Value() (driver.Value, error) {
 	buf := new(bytes.Buffer)
 	if err := binary.Write(buf, binary.LittleEndian, u); err != nil {
 		return nil, fmt.Errorf("encoding user id %v: %w", u, err)
@@ -408,7 +411,7 @@ func (u userIDs) Value() (driver.Value, error) {
 }
 
 // add adds the userID to the userIDs
-func (u *userIDs) add(userID int32) error {
+func (u *userIDList) add(userID int32) error {
 	// idx is either the index of userID or the place where it should be
 	// inserted.
 	ints := []int32(*u)
@@ -424,13 +427,13 @@ func (u *userIDs) add(userID int32) error {
 }
 
 // contains returns true if the userID is contains the list of userIDs.
-func (u *userIDs) contains(userID int32) bool {
+func (u *userIDList) contains(userID int32) bool {
 	ints := []int32(*u)
 	idx := sort.Search(len(ints), func(i int) bool { return ints[i] >= userID })
 	return idx < len(ints) && ints[idx] == userID
 }
 
-func (u *userIDs) len() int {
+func (u *userIDList) len() int {
 	return len([]int32(*u))
 }
 

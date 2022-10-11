@@ -950,19 +950,45 @@ func TestVotedPolls(t *testing.T) {
 	backend := memory.New()
 	ds := dsmock.Stub(dsmock.YAMLData(`---
 	poll/1/backend: memory
+	user/5/id: 5
 	`))
 	v := vote.New(backend, backend, ds, new(decrypterStub))
 	backend.Start(context.Background(), 1)
 	backend.Vote(context.Background(), 1, 5, []byte(`"Y"`))
-	buf := new(bytes.Buffer)
 
-	if err := v.VotedPolls(context.Background(), []int{1, 2}, 5, buf); err != nil {
+	got, err := v.VotedPolls(context.Background(), []int{1, 2}, 5)
+	if err != nil {
 		t.Fatalf("VotedPolls() returned unexected error: %v", err)
 	}
 
-	expect := `{"1":true,"2":false}` + "\n"
-	if buf.String() != expect {
-		t.Errorf("VotedPolls() wrote `%s`, expected `%s`", strings.TrimSpace(buf.String()), expect)
+	expect := map[int][]int{1: {5}, 2: nil}
+	if !reflect.DeepEqual(got, expect) {
+		t.Errorf("VotedPolls() == `%v`, expected `%v`", got, expect)
+	}
+}
+
+func TestVotedPollsWithDelegation(t *testing.T) {
+	backend := memory.New()
+	ds := dsmock.Stub(dsmock.YAMLData(`---
+	poll/1/backend: memory
+	user/5/id: 5
+	user/5/vote_delegations_$_from_ids: ["8"]
+	user/5/vote_delegations_$8_from_ids: [11,12]
+	`))
+	v := vote.New(backend, backend, ds)
+	backend.Start(context.Background(), 1)
+	backend.Vote(context.Background(), 1, 5, []byte(`"Y"`))
+	backend.Vote(context.Background(), 1, 10, []byte(`"Y"`))
+	backend.Vote(context.Background(), 1, 11, []byte(`"Y"`))
+
+	got, err := v.VotedPolls(context.Background(), []int{1, 2}, 5)
+	if err != nil {
+		t.Fatalf("VotedPolls() returned unexected error: %v", err)
+	}
+
+	expect := map[int][]int{1: {5, 11}, 2: nil}
+	if !reflect.DeepEqual(got, expect) {
+		t.Errorf("VotedPolls() == `%v`, expected `%v`", got, expect)
 	}
 }
 

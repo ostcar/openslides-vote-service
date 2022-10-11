@@ -40,6 +40,7 @@ func New(fast, long Backend, ds datastore.Getter, decrypter Decrypter) *Vote {
 	}
 }
 
+// backend returns the poll backend for a pollConfig object.
 func (v *Vote) backend(p pollConfig) Backend {
 	backend := v.longBackend
 	if p.backend == "fast" {
@@ -423,43 +424,87 @@ func ensureVoteUser(ctx context.Context, ds *dsfetch.Fetch, poll pollConfig, vot
 }
 
 // VotedPolls tells, on which the requestUser has already voted.
-func (v *Vote) VotedPolls(ctx context.Context, pollIDs []int, requestUser int, w io.Writer) (err error) {
+func (v *Vote) VotedPolls(ctx context.Context, pollIDs []int, requestUser int) (map[int][]int, error) {
 	log.Debug("Receive voted event for polls %v from user %d", pollIDs, requestUser)
-	defer func() {
-		log.Debug("End voted event with error: %v", err)
-	}()
+
 	ds := dsfetch.New(v.ds)
-	polls := make(map[int]bool)
 
-	for _, backend := range []Backend{v.fastBackend, v.longBackend} {
-		backendPolls, err := backend.VotedPolls(ctx, pollIDs, requestUser)
+	userIDs, err := delegatedUserIDs(ctx, ds, requestUser)
+	if err != nil {
+		return nil, fmt.Errorf("getting all delegated users: %w", err)
+	}
+	userIDs = append([]int{requestUser}, userIDs...)
+
+	backendPollIDs, err := v.pollsByBackend(ctx, ds, pollIDs)
+	if err != nil {
+		return nil, fmt.Errorf("sorting polls by its backend: %w", err)
+	}
+
+	result := make(map[int][]int)
+	for backend, pids := range backendPollIDs {
+		voted, err := backend.VotedPolls(ctx, pids, userIDs)
 		if err != nil {
-			return fmt.Errorf("getting polls from backend %s: %w", backend, err)
+			return nil, fmt.Errorf("voted polls for backend %s: %w", backend, err)
 		}
-		log.Debug("polls from backend %s: %v", backend, backendPolls)
-
-		for pid, value := range backendPolls {
-			poll, err := loadPoll(ctx, ds, pid)
-			if err != nil {
-				var errDoesNotExist dsfetch.DoesNotExistError
-				if errors.As(err, &errDoesNotExist) {
-					polls[pid] = false
-					continue
-				}
-				return fmt.Errorf("loading poll: %w", err)
-			}
-
-			if v.backend(poll) == backend {
-				polls[pid] = polls[pid] || value
-			}
+		for pid, userIDs := range voted {
+			result[pid] = userIDs
 		}
 	}
-	log.Debug("Combined polls: %v", polls)
 
-	if err := json.NewEncoder(w).Encode(polls); err != nil {
-		return fmt.Errorf("encoding polls %v: %w", polls, err)
+	for _, pid := range pollIDs {
+		if _, ok := result[pid]; !ok {
+			result[pid] = nil
+		}
 	}
-	return nil
+
+	return result, nil
+}
+
+// polls order a list of pollIDs by its backend.
+func (v *Vote) pollsByBackend(ctx context.Context, fetch *dsfetch.Fetch, pollIDs []int) (map[Backend][]int, error) {
+	backendPollIDs := map[Backend][]int{
+		v.longBackend: nil,
+		v.fastBackend: nil,
+	}
+
+	for _, pid := range pollIDs {
+		poll, err := loadPoll(ctx, fetch, pid)
+		if err != nil {
+			var errDoesNotExist dsfetch.DoesNotExistError
+			if errors.As(err, &errDoesNotExist) && errDoesNotExist.Collection == "poll" {
+				continue
+			}
+			return nil, fmt.Errorf("loading poll: %w", err)
+		}
+
+		backendPollIDs[v.backend(poll)] = append(backendPollIDs[v.backend(poll)], pid)
+	}
+
+	return backendPollIDs, nil
+}
+
+// delegatedUserIDs returns all user ids for which the user can vote.
+func delegatedUserIDs(ctx context.Context, fetch *dsfetch.Fetch, userID int) ([]int, error) {
+	meetingIDs, err := fetch.User_VoteDelegationsFromIDsTmpl(userID).Value(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting vote_delegation_from template field: %w", err)
+	}
+
+	meetingUserIDs := make([][]int, len(meetingIDs))
+	for i, mid := range meetingIDs {
+		fetch.User_VoteDelegationsFromIDs(userID, mid).Lazy(&meetingUserIDs[i])
+	}
+
+	if err := fetch.Execute(ctx); err != nil {
+		return nil, fmt.Errorf("getting vote_delegation_from values: %w", err)
+	}
+
+	var uids []int
+	for _, muids := range meetingUserIDs {
+		uids = append(uids, muids...)
+	}
+
+	return uids, nil
 }
 
 // VoteCount returns the vote_count for both backends combained
@@ -513,9 +558,9 @@ type Backend interface {
 	// ClearAll removes all data from the backend.
 	ClearAll(ctx context.Context) error
 
-	// VotedPolls tells for a list of poll IDs if the given userID has already
-	// voted.
-	VotedPolls(ctx context.Context, pollIDs []int, userID int) (map[int]bool, error)
+	// VotedPolls tells for a list of poll IDs if the any of the given userIDs
+	// has already voted.
+	VotedPolls(ctx context.Context, pollIDs []int, userIDs []int) (map[int][]int, error)
 
 	// VoteCount returns the amout of votes for each vote in the backend.
 	VoteCount(ctx context.Context) (map[int]int, error)

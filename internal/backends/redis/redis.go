@@ -249,23 +249,36 @@ func (b *Backend) ClearAll(ctx context.Context) error {
 	return nil
 }
 
-// VotedPolls tells for a list of poll IDs if the given userID has already
+// VotedPolls tells for a list of poll IDs if the given userIDs have already
 // voted.
 //
 // This command is not atomic.
-func (b *Backend) VotedPolls(ctx context.Context, pollIDs []int, userID int) (map[int]bool, error) {
+func (b *Backend) VotedPolls(ctx context.Context, pollIDs []int, userIDs []int) (map[int][]int, error) {
 	conn := b.pool.Get()
 	defer conn.Close()
 
-	out := make(map[int]bool)
+	out := make(map[int][]int)
 	for _, pollID := range pollIDs {
 		key := fmt.Sprintf(keyVote, pollID)
-		log.Debug("Redis: HEXISTS %s %d", key, userID)
-		exist, err := redis.Bool(conn.Do("HEXISTS", key, userID))
-		if err != nil {
-			return nil, fmt.Errorf("hexists for key %s: %w", key, err)
+
+		args := make([]any, len(userIDs)+1)
+		args[0] = key
+		for i, uid := range userIDs {
+			args[i+1] = uid
 		}
-		out[pollID] = exist
+
+		log.Debug("Redis: HMGET %v", args)
+		votes, err := redis.Strings(conn.Do("HMGET", args...))
+		if err != nil {
+			return nil, fmt.Errorf("HMGET for key %s: %w", key, err)
+		}
+
+		out[pollID] = nil
+		for i, userID := range userIDs {
+			if votes[i] != "" {
+				out[pollID] = append(out[pollID], userID)
+			}
+		}
 	}
 	return out, nil
 }

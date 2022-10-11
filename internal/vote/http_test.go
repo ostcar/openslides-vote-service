@@ -513,21 +513,20 @@ func TestHandleVote(t *testing.T) {
 }
 
 type votedPollserStub struct {
-	pollIDs      []int
-	user         int
-	expectWriter string
-	expectErr    error
+	pollIDs    []int
+	user       int
+	expectVote map[int][]int
+	expectErr  error
 }
 
-func (v *votedPollserStub) VotedPolls(ctx context.Context, pollIDs []int, requestUser int, w io.Writer) error {
+func (v *votedPollserStub) VotedPolls(ctx context.Context, pollIDs []int, requestUser int) (map[int][]int, error) {
 	v.pollIDs = pollIDs
 	v.user = requestUser
 
 	if v.expectErr != nil {
-		return v.expectErr
+		return nil, v.expectErr
 	}
-	_, err := w.Write([]byte(v.expectWriter))
-	return err
+	return v.expectVote, nil
 }
 
 func TestHandleVoted(t *testing.T) {
@@ -755,6 +754,7 @@ func TestHandleVoteCountSecondData(t *testing.T) {
 		{1: 11, 2: 20}, // No Change
 		{1: 11},        // Remove 2
 		{1: 11, 3: 30}, // Add 3
+		{1: 11},        // Remove 3 (that was not there at the beginning)
 	}
 
 	url := "/internal/vote/vote_count"
@@ -785,6 +785,7 @@ func TestHandleVoteCountSecondData(t *testing.T) {
 		{1: 11},
 		{2: 0},
 		{3: 30},
+		{3: 0},
 	}
 
 	decoder := json.NewDecoder(resp.Body)

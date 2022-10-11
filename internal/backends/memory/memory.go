@@ -115,13 +115,18 @@ func (b *Backend) ClearAll(ctx context.Context) error {
 
 // VotedPolls tells for a list of poll IDs if the given userID has already
 // voted.
-func (b *Backend) VotedPolls(ctx context.Context, pollIDs []int, userID int) (map[int]bool, error) {
+func (b *Backend) VotedPolls(ctx context.Context, pollIDs []int, userIDs []int) (map[int][]int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	out := make(map[int]bool)
-	for _, id := range pollIDs {
-		out[id] = b.voted[id][userID]
+	out := make(map[int][]int)
+	for _, pid := range pollIDs {
+		out[pid] = nil
+		for _, uid := range userIDs {
+			if b.voted[pid][uid] {
+				out[pid] = append(out[pid], uid)
+			}
+		}
 	}
 	return out, nil
 }

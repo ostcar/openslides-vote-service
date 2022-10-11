@@ -125,11 +125,14 @@ The responce is a json-object in the form like this:
 
 ```
 {
-  "1":true,
-  "2":false,
-  "3":true
+  "1":[42],
+  "2":[42],
+  "3":[42]
 }
 ```
+
+`42` is the user ID of the user. If a delegated user has also voted, the user id
+of that users will also be in the response.
 
 
 ### Vote Count

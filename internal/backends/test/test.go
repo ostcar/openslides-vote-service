@@ -247,13 +247,31 @@ func Backend(t *testing.T, backend vote.Backend) {
 		backend.Start(context.Background(), pollID)
 		backend.Vote(context.Background(), pollID, 5, []byte("my vote"))
 
-		voted, err := backend.VotedPolls(context.Background(), []int{pollID, pollID + 1}, 5)
+		got, err := backend.VotedPolls(context.Background(), []int{pollID, pollID + 1}, []int{5})
 		if err != nil {
 			t.Fatalf("VotedPolls returned unexpected error: %v", err)
 		}
 
-		if len(voted) != 2 || !voted[pollID] || voted[pollID+1] {
-			t.Errorf("VotedPolls returned %v, expected {%d: true, %d: false}", voted, pollID, pollID+1)
+		expect := map[int][]int{pollID: {5}, pollID + 1: nil}
+		if !reflect.DeepEqual(got, expect) {
+			t.Errorf("VotedPolls returned %v, expected %v", got, expect)
+		}
+	})
+
+	pollID++
+	t.Run("VotedPolls for many users", func(t *testing.T) {
+		backend.Start(context.Background(), pollID)
+		backend.Vote(context.Background(), pollID, 5, []byte("my vote"))
+		backend.Vote(context.Background(), pollID, 6, []byte("my vote"))
+
+		got, err := backend.VotedPolls(context.Background(), []int{pollID, pollID + 1}, []int{5, 6})
+		if err != nil {
+			t.Fatalf("VotedPolls returned unexpected error: %v", err)
+		}
+
+		expect := map[int][]int{pollID: {5, 6}, pollID + 1: nil}
+		if !reflect.DeepEqual(got, expect) {
+			t.Errorf("VotedPolls returned %v, expected %v", got, expect)
 		}
 	})
 
