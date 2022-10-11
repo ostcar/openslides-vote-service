@@ -336,7 +336,7 @@ func (v *Vote) Vote(ctx context.Context, pollID, requestUser int, r io.Reader) (
 	}{
 		requestUser,
 		voteUser,
-		vote.Value,
+		vote.Value.original,
 		voteWeight,
 	}
 
@@ -587,8 +587,8 @@ func (m *maybeInt) Value() (int, bool) {
 }
 
 type ballot struct {
-	UserID maybeInt        `json:"user_id"`
-	Value  json.RawMessage `json:"value"`
+	UserID maybeInt    `json:"user_id"`
+	Value  ballotValue `json:"value"`
 }
 
 func (v ballot) String() string {
@@ -597,6 +597,160 @@ func (v ballot) String() string {
 		return fmt.Sprintf("Error decoding ballot: %v", err)
 	}
 	return string(bs)
+}
+
+func (v *ballot) validate(poll pollConfig) error {
+	if poll.minAmount == 0 {
+		poll.minAmount = 1
+	}
+
+	if poll.maxAmount == 0 {
+		poll.maxAmount = 1
+	}
+
+	if poll.maxVotesPerOption == 0 {
+		poll.maxVotesPerOption = 1
+	}
+
+	allowedOptions := make(map[int]bool, len(poll.options))
+	for _, o := range poll.options {
+		allowedOptions[o] = true
+	}
+
+	allowedGlobal := map[string]bool{
+		"Y": poll.globalYes,
+		"N": poll.globalNo,
+		"A": poll.globalAbstain,
+	}
+
+	// Helper "error" that is not an error. Should help readability.
+	var voteIsValid error
+
+	switch poll.method {
+	case "Y", "N":
+		switch v.Value.Type() {
+		case ballotValueString:
+			// The user answered with Y, N or A (or another invalid string).
+			if !allowedGlobal[v.Value.str] {
+				return InvalidVote("Global vote %s is not enabled", v.Value.str)
+			}
+			return voteIsValid
+
+		case ballotValueOptionAmount:
+			var sumAmount int
+			for optionID, amount := range v.Value.optionAmount {
+				if amount < 0 {
+					return InvalidVote("Your vote for option %d has to be >= 0", optionID)
+				}
+
+				if amount > poll.maxVotesPerOption {
+					return InvalidVote("Your vote for option %d has to be <= %d", optionID, poll.maxVotesPerOption)
+				}
+
+				if !allowedOptions[optionID] {
+					return InvalidVote("Option_id %d does not belong to the poll", optionID)
+				}
+
+				sumAmount += amount
+			}
+
+			if sumAmount < poll.minAmount || sumAmount > poll.maxAmount {
+				return InvalidVote("The sum of your answers has to be between %d and %d", poll.minAmount, poll.maxAmount)
+			}
+
+			return voteIsValid
+
+		default:
+			return MessageError{ErrInvalid, "Your vote has a wrong format"}
+		}
+
+	case "YN", "YNA":
+		switch v.Value.Type() {
+		case ballotValueString:
+			// The user answered with Y, N or A (or another invalid string).
+			if !allowedGlobal[v.Value.str] {
+				return InvalidVote("Global vote %s is not enabled", v.Value.str)
+			}
+			return voteIsValid
+
+		case ballotValueOptionString:
+			for optionID, yna := range v.Value.optionYNA {
+				if !allowedOptions[optionID] {
+					return InvalidVote("Option_id %d does not belong to the poll", optionID)
+				}
+
+				if yna != "Y" && yna != "N" && (yna != "A" || poll.method != "YNA") {
+					// Valid that given data matches poll method.
+					return InvalidVote("Data for option %d does not fit the poll method.", optionID)
+				}
+			}
+			return voteIsValid
+
+		default:
+			return InvalidVote("Your vote has a wrong format")
+		}
+
+	default:
+		return InvalidVote("Your vote has a wrong format")
+	}
+}
+
+// voteData is the data a user sends as his vote.
+type ballotValue struct {
+	str          string
+	optionAmount map[int]int
+	optionYNA    map[int]string
+
+	original json.RawMessage
+}
+
+func (v ballotValue) MarshalJSON() ([]byte, error) {
+	return v.original, nil
+}
+
+func (v *ballotValue) UnmarshalJSON(b []byte) error {
+	v.original = b
+
+	if err := json.Unmarshal(b, &v.str); err == nil {
+		// voteData is a string
+		return nil
+	}
+
+	if err := json.Unmarshal(b, &v.optionAmount); err == nil {
+		// voteData is option_id to amount
+		return nil
+	}
+	v.optionAmount = nil
+
+	if err := json.Unmarshal(b, &v.optionYNA); err == nil {
+		// voteData is option_id to string
+		return nil
+	}
+
+	return fmt.Errorf("unknown vote value: `%s`", b)
+}
+
+const (
+	ballotValueUnknown = iota
+	ballotValueString
+	ballotValueOptionAmount
+	ballotValueOptionString
+)
+
+func (v *ballotValue) Type() int {
+	if v.str != "" {
+		return ballotValueString
+	}
+
+	if v.optionAmount != nil {
+		return ballotValueOptionAmount
+	}
+
+	if v.optionYNA != nil {
+		return ballotValueOptionString
+	}
+
+	return ballotValueUnknown
 }
 
 func isPresent(meetingID int, presentMeetings []int) bool {

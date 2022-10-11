@@ -208,17 +208,3 @@ The Service uses the following environment variables:
   The default is `1000`.
 * `DATASTORE_TIMEOUT`: Time until a request to the datastore times out. The
   default is `3s`.
-
-
-
-
-# Test Crypto Vote
-
-1. Create a poll and find out the poll id. In this example, it is 10
-2. Set the Poll to cryptographic. This has to be done directly with the datastore-writer:
-
-curl localhost:9011/internal/datastore/writer/write -H "content-type:application/json" -d '{"user_id":1,"information":null,"locked_fields":{},"events":[{"type":"update","fqid":"poll/10","fields":{"type":"cryptographic"}}]}'
-
-Alternative: Create a new poll via the backend.
-
-./openslides-performance request /system/action/handle_request  -b '[{"action":"poll.create","data":[{"title":"Test","type":"cryptographic","pollmethod":"YNA","meeting_id":1,"content_object_id":"motion/2","options":[{"text":"mal schauen"}]}]}]'

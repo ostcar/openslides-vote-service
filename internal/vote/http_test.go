@@ -180,7 +180,7 @@ func TestHandleStop(t *testing.T) {
 			t.Errorf("Stopper was called with id %d, expected 1", stopper.id)
 		}
 
-		expect := `{"votes":"some values","signature":null,"user_ids":[]}`
+		expect := `{"votes":"\"some values\"","signature":null,"user_ids":[]}`
 		if trimed := strings.TrimSpace(resp.Body.String()); trimed != expect {
 			t.Errorf("Got body `%s`, expected `%s`", trimed, expect)
 		}
