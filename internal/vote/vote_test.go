@@ -1,7 +1,6 @@
 package vote_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -975,7 +974,7 @@ func TestVotedPollsWithDelegation(t *testing.T) {
 	user/5/vote_delegations_$_from_ids: ["8"]
 	user/5/vote_delegations_$8_from_ids: [11,12]
 	`))
-	v := vote.New(backend, backend, ds)
+	v := vote.New(backend, backend, ds, new(decrypterStub))
 	backend.Start(context.Background(), 1)
 	backend.Vote(context.Background(), 1, 5, []byte(`"Y"`))
 	backend.Vote(context.Background(), 1, 10, []byte(`"Y"`))
