@@ -113,11 +113,3 @@ func (err MessageError) Error() string {
 func (err MessageError) Unwrap() error {
 	return err.TypeError
 }
-
-// InvalidVote returns an error for invaid votes.
-func InvalidVote(format string, a ...interface{}) MessageError {
-	return MessageError{
-		ErrInvalid,
-		fmt.Sprintf(format, a...),
-	}
-}

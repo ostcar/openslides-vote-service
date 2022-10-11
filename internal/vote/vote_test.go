@@ -3,8 +3,10 @@ package vote_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -231,7 +233,7 @@ func TestVoteStop(t *testing.T) {
 	`)}, new(decrypterStub))
 
 	t.Run("Unknown poll", func(t *testing.T) {
-		_, _, _, err := v.Stop(context.Background(), 1)
+		_, err := v.Stop(context.Background(), 1)
 
 		if !errors.Is(err, vote.ErrNotExists) {
 			t.Errorf("Stopping an unknown poll has to return an ErrNotExists, got: %v", err)
@@ -246,10 +248,13 @@ func TestVoteStop(t *testing.T) {
 		backend.Vote(context.Background(), 2, 1, []byte(`{"value":"polldata1"}`))
 		backend.Vote(context.Background(), 2, 2, []byte(`{"value":"polldata2"}`))
 
-		votes, _, userIDs, err := v.Stop(context.Background(), 2)
+		stopResult, err := v.Stop(context.Background(), 2)
 		if err != nil {
 			t.Fatalf("Stop returned unexpected error: %v", err)
 		}
+
+		votes := stopResult.Votes
+		userIDs := stopResult.UserIDs
 
 		expected := `[{"value":"polldata1"},{"value":"polldata2"}]`
 		if string(votes) != expected {
@@ -272,10 +277,13 @@ func TestVoteStop(t *testing.T) {
 			t.Fatalf("Start returned an unexpected error: %v", err)
 		}
 
-		votes, _, userIDs, err := v.Stop(context.Background(), 3)
+		stopResult, err := v.Stop(context.Background(), 3)
 		if err != nil {
 			t.Fatalf("Stop returned unexpected error: %v", err)
 		}
+
+		votes := stopResult.Votes
+		userIDs := stopResult.UserIDs
 
 		if string(votes) != `[]` {
 			t.Errorf("Got votes %s, expected []", votes)
@@ -285,6 +293,86 @@ func TestVoteStop(t *testing.T) {
 			t.Errorf("Got userIDs %v, expected []", userIDs)
 		}
 	})
+}
+
+func TestVoteStopCrypto(t *testing.T) {
+	data := dsmock.YAMLData(`
+	organization/1/url: test.com
+	poll/1:
+		meeting_id: 1
+		type: cryptographic
+		pollmethod: YN
+		global_yes: true
+		global_no: true
+	`)
+	backend := memory.New()
+	v := vote.New(backend, backend, dsmock.Stub(data), new(decrypterStub))
+
+	if err := backend.Start(context.Background(), 1); err != nil {
+		t.Fatalf("Start returned an unexpected error: %v", err)
+	}
+
+	polldata1 := base64.StdEncoding.EncodeToString([]byte(`"Y"`))
+	polldata2 := base64.StdEncoding.EncodeToString([]byte(`"N"`))
+
+	backend.Vote(context.Background(), 1, 1, []byte(fmt.Sprintf(`{"value":"%s"}`, polldata1)))
+	backend.Vote(context.Background(), 1, 2, []byte(fmt.Sprintf(`{"value":"%s"}`, polldata2)))
+
+	stopResult, err := v.Stop(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("Stop returned unexpected error: %v", err)
+	}
+
+	expected := vote.StopResult{
+		Votes:     []byte(`{"id":"/1","votes":["Y","N"]}`),
+		Signature: []byte("signature"),
+		UserIDs:   []int{1, 2},
+		Invalid:   map[int]string{},
+	}
+
+	if !reflect.DeepEqual(stopResult, expected) {
+		t.Errorf("\nGot\t\t\t%v\nexpected\t%v (result.Votes: %s)", stopResult, expected, stopResult.Votes)
+	}
+}
+
+func TestVoteStopCryptoInvalid(t *testing.T) {
+	data := dsmock.YAMLData(`
+	organization/1/url: test.com
+	poll/1:
+		meeting_id: 1
+		type: cryptographic
+		pollmethod: YN
+		global_yes: true
+		global_no: true
+	`)
+	backend := memory.New()
+	v := vote.New(backend, backend, dsmock.Stub(data), new(decrypterStub))
+
+	if err := backend.Start(context.Background(), 1); err != nil {
+		t.Fatalf("Start returned an unexpected error: %v", err)
+	}
+
+	polldata1 := base64.StdEncoding.EncodeToString([]byte(`"Y"`))
+	polldata2 := base64.StdEncoding.EncodeToString([]byte(`"Invalid"`))
+
+	backend.Vote(context.Background(), 1, 1, []byte(fmt.Sprintf(`{"value":"%s"}`, polldata1)))
+	backend.Vote(context.Background(), 1, 2, []byte(fmt.Sprintf(`{"value":"%s"}`, polldata2)))
+
+	stopResult, err := v.Stop(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("Stop returned unexpected error: %v", err)
+	}
+
+	expected := vote.StopResult{
+		Votes:     []byte(`{"id":"/1","votes":["Y","Invalid"]}`),
+		Signature: []byte("signature"),
+		UserIDs:   []int{1, 2},
+		Invalid:   map[int]string{1: "Global vote Invalid is not enabled"},
+	}
+
+	if !reflect.DeepEqual(stopResult, expected) {
+		t.Errorf("\nGot\t\t\t%v\nexpected\t%v (result.Votes: %s)", stopResult, expected, stopResult.Votes)
+	}
 }
 
 func TestVoteClear(t *testing.T) {

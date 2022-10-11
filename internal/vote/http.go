@@ -65,7 +65,7 @@ func handleStart(mux *http.ServeMux, start starter) {
 // stopper stops a poll. It sets the state of the poll, so that no other user
 // can vote. It writes the vote results to the writer.
 type stopper interface {
-	Stop(ctx context.Context, pollID int) (json.RawMessage, []byte, []int, error)
+	Stop(ctx context.Context, pollID int) (StopResult, error)
 }
 
 func handleStop(mux *http.ServeMux, stop stopper) {
@@ -86,7 +86,7 @@ func handleStop(mux *http.ServeMux, stop stopper) {
 				return
 			}
 
-			votes, signature, userIDs, err := stop.Stop(r.Context(), id)
+			stopResult, err := stop.Stop(r.Context(), id)
 			if err != nil {
 				handleError(w, err, true)
 				return
@@ -94,24 +94,26 @@ func handleStop(mux *http.ServeMux, stop stopper) {
 
 			// Encode the votes object separatly to make it possible for the
 			// backend (python) to read its original value.
-			encodedVotes, err := json.Marshal(votes)
+			encodedVotes, err := json.Marshal(stopResult.Votes)
 			if err != nil {
 				handleError(w, fmt.Errorf("encoding votes: %w", err), true)
 				return
 			}
 
-			if userIDs == nil {
-				userIDs = []int{}
+			if stopResult.UserIDs == nil {
+				stopResult.UserIDs = []int{}
 			}
 
 			out := struct {
-				Votes     string `json:"votes"`
-				Signature []byte `json:"signature"`
-				Users     []int  `json:"user_ids"`
+				Votes     string         `json:"votes"`
+				Signature []byte         `json:"signature"`
+				Users     []int          `json:"user_ids"`
+				Invalid   map[int]string `json:"invalid,omitempty"`
 			}{
 				string(encodedVotes),
-				signature,
-				userIDs,
+				stopResult.Signature,
+				stopResult.UserIDs,
+				stopResult.Invalid,
 			}
 
 			if err := json.NewEncoder(w).Encode(out); err != nil {

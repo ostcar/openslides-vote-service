@@ -131,14 +131,18 @@ type stopperStub struct {
 	expectedUserIDs   []int
 }
 
-func (s *stopperStub) Stop(ctx context.Context, pollID int) (json.RawMessage, []byte, []int, error) {
+func (s *stopperStub) Stop(ctx context.Context, pollID int) (StopResult, error) {
 	s.id = pollID
 
 	if s.expectErr != nil {
-		return nil, nil, nil, s.expectErr
+		return StopResult{}, s.expectErr
 	}
 
-	return s.expectVotes, s.expectedSignature, s.expectedUserIDs, nil
+	return StopResult{
+		Votes:     s.expectVotes,
+		Signature: s.expectedSignature,
+		UserIDs:   s.expectedUserIDs,
+	}, nil
 }
 
 func TestHandleStop(t *testing.T) {

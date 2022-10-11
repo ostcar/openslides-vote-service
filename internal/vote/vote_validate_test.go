@@ -2,7 +2,6 @@ package vote
 
 import (
 	"encoding/json"
-	"errors"
 	"testing"
 )
 
@@ -300,17 +299,17 @@ func TestVoteValidate(t *testing.T) {
 				t.Fatalf("decoding vote: %v", err)
 			}
 
-			err := b.validate(tt.poll)
+			validation := validate(tt.poll, b.Value)
 
 			if tt.expectValid {
-				if err != nil {
-					t.Fatalf("Validate returned unexpected error: %v", err)
+				if validation != "" {
+					t.Fatalf("Validate returned unexpected message: %s", validation)
 				}
 				return
 			}
 
-			if !errors.Is(err, ErrInvalid) {
-				t.Fatalf("Expected ErrInvalid, got: %v", err)
+			if validation == "" {
+				t.Errorf("Got no validation error")
 			}
 		})
 	}

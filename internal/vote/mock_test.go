@@ -60,7 +60,15 @@ func (d *decrypterStub) Stop(ctx context.Context, pollID string, voteList [][]by
 		votes[i] = vote
 	}
 
-	decryptedContent, err = json.Marshal(votes)
+	content := struct {
+		ID    string            `json:"id"`
+		Votes []json.RawMessage `json:"votes"`
+	}{
+		pollID,
+		votes,
+	}
+
+	decryptedContent, err = json.Marshal(content)
 	if err != nil {
 		return nil, nil, fmt.Errorf("marshal decrypted content: %w", err)
 	}
