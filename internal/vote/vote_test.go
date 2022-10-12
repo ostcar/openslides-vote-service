@@ -311,8 +311,8 @@ func TestVoteStopCrypto(t *testing.T) {
 		t.Fatalf("Start returned an unexpected error: %v", err)
 	}
 
-	polldata1 := base64.StdEncoding.EncodeToString([]byte(`"Y"`))
-	polldata2 := base64.StdEncoding.EncodeToString([]byte(`"N"`))
+	polldata1 := base64.StdEncoding.EncodeToString([]byte(`{"votes":"Y"}`))
+	polldata2 := base64.StdEncoding.EncodeToString([]byte(`{"votes":"N"}`))
 
 	backend.Vote(context.Background(), 1, 1, []byte(fmt.Sprintf(`{"value":"%s"}`, polldata1)))
 	backend.Vote(context.Background(), 1, 2, []byte(fmt.Sprintf(`{"value":"%s"}`, polldata2)))
@@ -323,7 +323,7 @@ func TestVoteStopCrypto(t *testing.T) {
 	}
 
 	expected := vote.StopResult{
-		Votes:     []byte(`{"id":"/1","votes":["Y","N"]}`),
+		Votes:     []byte(`{"id":"/1","votes":[{"votes":"Y"},{"votes":"N"}]}`),
 		Signature: []byte("signature"),
 		UserIDs:   []int{1, 2},
 		Invalid:   map[int]string{},
@@ -351,8 +351,8 @@ func TestVoteStopCryptoInvalid(t *testing.T) {
 		t.Fatalf("Start returned an unexpected error: %v", err)
 	}
 
-	polldata1 := base64.StdEncoding.EncodeToString([]byte(`"Y"`))
-	polldata2 := base64.StdEncoding.EncodeToString([]byte(`"Invalid"`))
+	polldata1 := base64.StdEncoding.EncodeToString([]byte(`{"votes":"Y"}`))
+	polldata2 := base64.StdEncoding.EncodeToString([]byte(`{"votes":"Invalid"}`))
 
 	backend.Vote(context.Background(), 1, 1, []byte(fmt.Sprintf(`{"value":"%s"}`, polldata1)))
 	backend.Vote(context.Background(), 1, 2, []byte(fmt.Sprintf(`{"value":"%s"}`, polldata2)))
@@ -363,7 +363,7 @@ func TestVoteStopCryptoInvalid(t *testing.T) {
 	}
 
 	expected := vote.StopResult{
-		Votes:     []byte(`{"id":"/1","votes":["Y","Invalid"]}`),
+		Votes:     []byte(`{"id":"/1","votes":[{"votes":"Y"},{"votes":"Invalid"}]}`),
 		Signature: []byte("signature"),
 		UserIDs:   []int{1, 2},
 		Invalid:   map[int]string{1: "Global vote Invalid is not enabled"},

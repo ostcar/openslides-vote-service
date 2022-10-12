@@ -200,8 +200,10 @@ func (v *Vote) stopCrypto(ctx context.Context, poll pollConfig, ds *dsfetch.Fetc
 	}
 
 	var decryptedContent struct {
-		ID    string        `json:"id"`
-		Votes []ballotValue `json:"votes"`
+		ID    string `json:"id"`
+		Votes []struct {
+			Votes ballotValue `json:"votes"`
+		} `json:"votes"`
 	}
 	if err := json.Unmarshal(decrypted, &decryptedContent); err != nil {
 		return StopResult{}, fmt.Errorf("encoding decrypted votes: %w", err)
@@ -209,7 +211,7 @@ func (v *Vote) stopCrypto(ctx context.Context, poll pollConfig, ds *dsfetch.Fetc
 
 	invalid := make(map[int]string)
 	for i, vote := range decryptedContent.Votes {
-		if validation := validate(poll, vote); validation != "" {
+		if validation := validate(poll, vote.Votes); validation != "" {
 			invalid[i] = validation
 		}
 	}
