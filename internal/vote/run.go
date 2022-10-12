@@ -360,6 +360,9 @@ func buildBackends(
 		case "postgres":
 			if pb == nil {
 				pb, err = buildPostgresBackend(ctx, env, getSecret)
+				if err != nil {
+					return nil, fmt.Errorf("build postgres backend: %w", err)
+				}
 			}
 			return pb, nil
 
