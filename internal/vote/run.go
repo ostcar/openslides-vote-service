@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -26,7 +28,7 @@ const authDebugKey = "auth-dev-key"
 //
 // The service is configured by the argument `environment`. It expect strings in
 // the format `KEY=VALUE`, like the output from `os.Environmen()`.
-func Run(ctx context.Context, environment []string, getSecret func(name string) (string, error)) error {
+func Run(ctx context.Context, environment []string) error {
 	env := defaultEnv(environment)
 
 	errHandler := func(err error) {
@@ -38,23 +40,23 @@ func Run(ctx context.Context, environment []string, getSecret func(name string) 
 		return fmt.Errorf("building message bus: %w", err)
 	}
 
-	ds, err := buildDatastore(ctx, env, messageBus, errHandler)
+	ds, backgroud, err := initDatastore(ctx, env, messageBus, errHandler)
 	if err != nil {
 		return fmt.Errorf("building datastore: %w", err)
 	}
+	backgroud(ctx)
 
 	auth, err := buildAuth(
 		ctx,
 		env,
 		messageBus,
 		errHandler,
-		getSecret,
 	)
 	if err != nil {
 		return fmt.Errorf("building auth: %w", err)
 	}
 
-	fastBackend, longBackend, err := buildBackends(ctx, env, getSecret)
+	fastBackend, longBackend, err := buildBackends(ctx, env)
 	if err != nil {
 		return fmt.Errorf("building backends: %w", err)
 	}
@@ -115,6 +117,13 @@ func defaultEnv(environment []string) map[string]string {
 		"VOTE_REDIS_HOST":   "localhost",
 		"VOTE_REDIS_PORT":   "6379",
 
+		"DATASTORE_DATABASE_HOST": "localhost",
+		"DATASTORE_DATABASE_PORT": "5432",
+		"DATASTORE_DATABASE_USER": "openslides",
+		"DATASTORE_DATABASE_NAME": "openslides",
+
+		"SECRETS_PATH": "/run/secrets",
+
 		"DATASTORE_READER_HOST":     "localhost",
 		"DATASTORE_READER_PORT":     "9010",
 		"DATASTORE_READER_PROTOCOL": "http",
@@ -152,52 +161,78 @@ func defaultEnv(environment []string) map[string]string {
 	return env
 }
 
-func secret(name string, env map[string]string, getSecret func(name string) (string, error), dev bool) (string, error) {
-	defaultSecrets := map[string]string{
-		"auth_token_key":  auth.DebugTokenKey,
-		"auth_cookie_key": auth.DebugCookieKey,
-	}
+func secret(env map[string]string, name string) ([]byte, error) {
+	useDev, _ := strconv.ParseBool(env["OPENSLIDES_DEVELOPMENT"])
 
-	d, ok := defaultSecrets[name]
-	if !ok {
-		return "", fmt.Errorf("unknown secret %s", name)
-	}
-
-	secretFiles := map[string]string{
-		"auth_token_key":  env["AUTH_TOKEN_KEY_FILE"],
-		"auth_cookie_key": env["AUTH_COOKIE_KEY_FILE"],
-	}
-
-	s, err := getSecret(secretFiles[name])
-	if err != nil {
-		if !dev {
-			return "", fmt.Errorf("can not read secret %s: %w", s, err)
+	if useDev {
+		debugSecred := "openslides"
+		switch name {
+		case "auth_token_key":
+			debugSecred = auth.DebugTokenKey
+		case "auth_cookie_key":
+			debugSecred = auth.DebugCookieKey
 		}
-		s = d
+
+		return []byte(debugSecred), nil
 	}
-	return s, nil
+
+	path := path.Join(env["SECRETS_PATH"], name)
+	secret, err := os.ReadFile(path)
+	if err != nil {
+		// TODO EXTERMAL ERROR
+		return nil, fmt.Errorf("reading `%s`: %w", path, err)
+	}
+
+	return secret, nil
 }
 
-func buildDatastore(ctx context.Context, env map[string]string, receiver datastore.Updater, errHandler func(error)) (*datastore.Datastore, error) {
-	protocol := env["DATASTORE_READER_PROTOCOL"]
-	host := env["DATASTORE_READER_HOST"]
-	port := env["DATASTORE_READER_PORT"]
-	url := protocol + "://" + host + ":" + port
-
+func initDatastore(ctx context.Context, env map[string]string, mb datastore.Updater, errHandler func(error)) (*datastore.Datastore, func(context.Context), error) {
 	maxParallel, err := strconv.Atoi(env["MAX_PARALLEL_KEYS"])
 	if err != nil {
-		return nil, fmt.Errorf("environmentvariable MAX_PARALLEL_KEYS has to be a number, not %s", env["MAX_PARALLEL_KEYS"])
+		return nil, nil, fmt.Errorf("environment variable MAX_PARALLEL_KEYS has to be a number, not %s", env["MAX_PARALLEL_KEYS"])
 	}
 
 	timeout, err := parseDuration(env["DATASTORE_TIMEOUT"])
 	if err != nil {
-		return nil, fmt.Errorf("environment variable DATASTORE_TIMEOUT has to be a duration like 3s, not %s: %w", env["DATASTORE_TIMEOUT"], err)
+		return nil, nil, fmt.Errorf("environment variable DATASTORE_TIMEOUT has to be a duration like 3s, not %s: %w", env["DATASTORE_TIMEOUT"], err)
 	}
 
-	source := datastore.NewSourceDatastore(url, receiver, maxParallel, timeout)
-	ds := datastore.New(source, nil, nil)
-	go ds.ListenOnUpdates(ctx, errHandler)
-	return ds, nil
+	datastoreSource := datastore.NewSourceDatastore(
+		env["DATASTORE_READER_PROTOCOL"]+"://"+env["DATASTORE_READER_HOST"]+":"+env["DATASTORE_READER_PORT"],
+		mb,
+		maxParallel,
+		timeout,
+	)
+
+	password, err := secret(env, "postgres_password")
+	if err != nil {
+		return nil, nil, fmt.Errorf("getting postgres password: %w", err)
+	}
+
+	addr := fmt.Sprintf(
+		"postgres://%s@%s:%s/%s",
+		env["DATASTORE_DATABASE_USER"],
+		env["DATASTORE_DATABASE_HOST"],
+		env["DATASTORE_DATABASE_PORT"],
+		env["DATASTORE_DATABASE_NAME"],
+	)
+
+	postgresSource, err := datastore.NewSourcePostgres(ctx, addr, string(password), datastoreSource)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating connection to postgres: %w", err)
+	}
+
+	ds := datastore.New(
+		postgresSource,
+		nil,
+		datastoreSource,
+	)
+
+	background := func(ctx context.Context) {
+		go ds.ListenOnUpdates(ctx, errHandler)
+	}
+
+	return ds, background, nil
 }
 
 // buildAuth returns the auth service needed by the http server.
@@ -209,25 +244,23 @@ func buildAuth(
 	env map[string]string,
 	messageBus auth.LogoutEventer,
 	errHandler func(error),
-	getSecret func(name string) (string, error),
 ) (authenticater, error) {
 	method := env["AUTH"]
 	switch method {
 	case "ticket":
 		fmt.Println("Auth Method: ticket")
-		dev, _ := strconv.ParseBool(env["OPENSLIDES_DEVELOPMENT"])
 
-		tokenKey, err := secret("auth_token_key", env, getSecret, dev)
+		tokenKey, err := secret(env, "auth_token_key")
 		if err != nil {
 			return nil, fmt.Errorf("getting token secret: %w", err)
 		}
 
-		cookieKey, err := secret("auth_cookie_key", env, getSecret, dev)
+		cookieKey, err := secret(env, "auth_cookie_key")
 		if err != nil {
 			return nil, fmt.Errorf("getting cookie secret: %w", err)
 		}
 
-		if tokenKey == auth.DebugTokenKey || cookieKey == auth.DebugCookieKey {
+		if string(tokenKey) == auth.DebugTokenKey || string(cookieKey) == auth.DebugCookieKey {
 			fmt.Println("Auth with debug key")
 		}
 
@@ -297,14 +330,10 @@ func buildRedisBackend(ctx context.Context, env map[string]string) (*redis.Backe
 	return r, nil
 }
 
-func buildPostgresBackend(ctx context.Context, env map[string]string, getSecret func(name string) (string, error)) (*postgres.Backend, error) {
-	password := "openslides"
-	if env["OPENSLIDES_DEVELOPMENT"] == "false" {
-		filePassword, err := getSecret(env["VOTE_DATABASE_PASSWORD_FILE"])
-		if err != nil {
-			return nil, fmt.Errorf("reading postgres password: %w", err)
-		}
-		password = filePassword
+func buildPostgresBackend(ctx context.Context, env map[string]string) (*postgres.Backend, error) {
+	password, err := secret(env, "VOTE_DATABASE_PASSWORD_FILE")
+	if err != nil {
+		return nil, fmt.Errorf("reading postgres password: %w", err)
 	}
 
 	addr := fmt.Sprintf(
@@ -314,7 +343,7 @@ func buildPostgresBackend(ctx context.Context, env map[string]string, getSecret 
 		env["VOTE_DATABASE_PORT"],
 		env["VOTE_DATABASE_NAME"],
 	)
-	p, err := postgres.New(ctx, addr, password)
+	p, err := postgres.New(ctx, addr, string(password))
 	if err != nil {
 		return nil, fmt.Errorf("creating postgres connection pool: %w", err)
 	}
@@ -326,11 +355,7 @@ func buildPostgresBackend(ctx context.Context, env map[string]string, getSecret 
 	return p, nil
 }
 
-func buildBackends(
-	ctx context.Context,
-	env map[string]string,
-	getSecret func(name string) (string, error),
-) (fast Backend, long Backend, err error) {
+func buildBackends(ctx context.Context, env map[string]string) (fast Backend, long Backend, err error) {
 	var rb *redis.Backend
 	var pb *postgres.Backend
 
@@ -350,7 +375,7 @@ func buildBackends(
 
 		case "postgres":
 			if pb == nil {
-				pb, err = buildPostgresBackend(ctx, env, getSecret)
+				pb, err = buildPostgresBackend(ctx, env)
 			}
 			return pb, nil
 

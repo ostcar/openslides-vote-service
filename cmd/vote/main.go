@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"io"
 	golog "log"
 	"os"
 	"os/signal"
@@ -23,7 +21,7 @@ func main() {
 		log.SetDebugLogger(golog.New(os.Stderr, "DEBUG ", golog.LstdFlags))
 	}
 
-	if err := vote.Run(ctx, os.Environ(), secret); err != nil {
+	if err := vote.Run(ctx, os.Environ()); err != nil {
 		log.Info("Error: %v", err)
 		os.Exit(1)
 	}
@@ -46,18 +44,4 @@ func interruptContext() (context.Context, context.CancelFunc) {
 		os.Exit(1)
 	}()
 	return ctx, cancel
-}
-
-func secret(file string) (string, error) {
-	f, err := os.Open(file)
-	if err != nil {
-		return "", fmt.Errorf("open secret file %s: %w", file, err)
-	}
-
-	secret, err := io.ReadAll(f)
-	if err != nil {
-		return "", fmt.Errorf("reading %q: %w", file, err)
-	}
-
-	return string(secret), nil
 }

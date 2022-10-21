@@ -13,8 +13,8 @@ import (
 
 	"github.com/OpenSlides/openslides-vote-service/internal/log"
 	"github.com/jackc/pgconn"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 //go:embed schema.sql
@@ -33,7 +33,6 @@ func New(ctx context.Context, url string, password string) (*Backend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid connection url: %w", err)
 	}
-	conf.LazyConnect = true
 
 	// Set the password. It could contains letters that are not supported by ParseConfig
 	conf.ConnConfig.Password = password
@@ -43,9 +42,9 @@ func New(ctx context.Context, url string, password string) (*Backend, error) {
 	// remove the connection pool here or not use bgBouncer at all.
 	//
 	// See https://github.com/OpenSlides/openslides-vote-service/pull/66
-	conf.ConnConfig.PreferSimpleProtocol = true
+	conf.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 
-	pool, err := pgxpool.ConnectConfig(ctx, conf)
+	pool, err := pgxpool.NewWithConfig(ctx, conf)
 	if err != nil {
 		return nil, fmt.Errorf("creating connection pool: %w", err)
 	}
@@ -117,9 +116,9 @@ func (b *Backend) voteOnce(ctx context.Context, pollID int, userID int, object [
 		log.Debug("SQL: End transaction for vote with error: %v", err)
 	}()
 
-	err = b.pool.BeginTxFunc(
+	err = pgx.BeginTxFunc(
 		ctx,
-		pgx.TxOptions{
+		b.pool, pgx.TxOptions{
 			IsoLevel: "REPEATABLE READ",
 		},
 		func(tx pgx.Tx) error {
@@ -194,8 +193,9 @@ func (b *Backend) stopOnce(ctx context.Context, pollID int) (objects [][]byte, u
 		log.Debug("SQL: End transaction for vote with error: %v", err)
 	}()
 
-	err = b.pool.BeginTxFunc(
+	err = pgx.BeginTxFunc(
 		ctx,
+		b.pool,
 		pgx.TxOptions{
 			IsoLevel: "REPEATABLE READ",
 		},
