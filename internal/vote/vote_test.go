@@ -1000,10 +1000,15 @@ func TestVotedPolls(t *testing.T) {
 func TestVotedPollsWithDelegation(t *testing.T) {
 	backend := memory.New()
 	ds := dsmock.Stub(dsmock.YAMLData(`---
-	poll/1/backend: memory
-	user/5/id: 5
-	user/5/vote_delegations_$_from_ids: ["8"]
-	user/5/vote_delegations_$8_from_ids: [11,12]
+	poll/1:
+		backend: memory
+		type: named
+		meeting_id: 40
+		pollmethod: Y
+
+	user/5:
+		vote_delegations_$_from_ids: ["8"]
+		vote_delegations_$8_from_ids: [11,12]
 	`))
 	v := vote.New(backend, backend, ds)
 	backend.Start(context.Background(), 1)

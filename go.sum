@@ -5,8 +5,8 @@ github.com/Microsoft/go-winio v0.6.0 h1:slsWYD/zyx7lCXoZVlvQrj0hPTM1HI4+v1sIda2y
 github.com/Microsoft/go-winio v0.6.0/go.mod h1:cTAf44im0RAYeL23bpB+fzCyDH2MJiz2BO69KH/soAE=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 h1:TngWCqHvy9oXAN6lEVMRuU21PR1EtLVZJmdB18Gu3Rw=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5/go.mod h1:lmUJ/7eu/Q8D7ML55dXQrVaamCz2vxCfdQBasLZfHKk=
-github.com/OpenSlides/openslides-autoupdate-service v0.4.1-0.20221021175224-5e0cd06189e2 h1:lVa3KirEXS4FhUqo0q/NgcWs2Fmlc2qpkAp286Ck7VI=
-github.com/OpenSlides/openslides-autoupdate-service v0.4.1-0.20221021175224-5e0cd06189e2/go.mod h1:G1fjGx3/jw27/L1XoajXD4C8hsoBuamZCH2TR9Jm1Zc=
+github.com/OpenSlides/openslides-autoupdate-service v0.4.1-0.20221022062356-3aa893051c6c h1:5X8gyD3g7VbH3nLxRgTJTfwN0azw4tUpL2/6lNGGyNE=
+github.com/OpenSlides/openslides-autoupdate-service v0.4.1-0.20221022062356-3aa893051c6c/go.mod h1:G1fjGx3/jw27/L1XoajXD4C8hsoBuamZCH2TR9Jm1Zc=
 github.com/cenkalti/backoff/v4 v4.1.3 h1:cFAlzYUlVYDysBEH2T5hyJZMh3+5+WCBvSnK6Q8UtC4=
 github.com/cenkalti/backoff/v4 v4.1.3/go.mod h1:scbssz8iZGpm3xbr14ovlUdkxfGXNInqkPWOWmG2CLw=
 github.com/checkpoint-restore/go-criu/v5 v5.3.0/go.mod h1:E/eQpaFtUKGOOSEBZgmKAcn+zUUwWxqcaKZlF54wK8E=

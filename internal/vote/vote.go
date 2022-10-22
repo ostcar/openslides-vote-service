@@ -324,7 +324,21 @@ func (v *Vote) VotedPolls(ctx context.Context, pollIDs []int, requestUser int) (
 	}
 	userIDs = append([]int{requestUser}, userIDs...)
 
-	backendPollIDs, err := v.pollsByBackend(ctx, ds, pollIDs)
+	polls := make([]pollConfig, 0, len(pollIDs))
+	for _, pid := range pollIDs {
+		poll, err := loadPoll(ctx, ds, pid)
+		if err != nil {
+			var errDoesNotExist dsfetch.DoesNotExistError
+			if errors.As(err, &errDoesNotExist) && errDoesNotExist.Collection == "poll" {
+				continue
+			}
+			return nil, fmt.Errorf("loading poll: %w", err)
+		}
+
+		polls = append(polls, poll)
+	}
+
+	backendPollIDs, err := v.pollsByBackend(polls)
 	if err != nil {
 		return nil, fmt.Errorf("sorting polls by its backend: %w", err)
 	}
@@ -350,23 +364,14 @@ func (v *Vote) VotedPolls(ctx context.Context, pollIDs []int, requestUser int) (
 }
 
 // polls order a list of pollIDs by its backend.
-func (v *Vote) pollsByBackend(ctx context.Context, fetch *dsfetch.Fetch, pollIDs []int) (map[Backend][]int, error) {
+func (v *Vote) pollsByBackend(polls []pollConfig) (map[Backend][]int, error) {
 	backendPollIDs := map[Backend][]int{
 		v.longBackend: nil,
 		v.fastBackend: nil,
 	}
 
-	for _, pid := range pollIDs {
-		poll, err := loadPoll(ctx, fetch, pid)
-		if err != nil {
-			var errDoesNotExist dsfetch.DoesNotExistError
-			if errors.As(err, &errDoesNotExist) && errDoesNotExist.Collection == "poll" {
-				continue
-			}
-			return nil, fmt.Errorf("loading poll: %w", err)
-		}
-
-		backendPollIDs[v.backend(poll)] = append(backendPollIDs[v.backend(poll)], pid)
+	for _, poll := range polls {
+		backendPollIDs[v.backend(poll)] = append(backendPollIDs[v.backend(poll)], poll.id)
 	}
 
 	return backendPollIDs, nil
