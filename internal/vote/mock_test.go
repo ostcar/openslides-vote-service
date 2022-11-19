@@ -2,6 +2,8 @@ package vote_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/datastore/dskey"

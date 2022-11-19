@@ -16,6 +16,7 @@ import (
 	"github.com/OpenSlides/openslides-vote-service/internal/backends/redis"
 	"github.com/OpenSlides/openslides-vote-service/internal/log"
 	"github.com/OpenSlides/openslides-vote-service/internal/vote"
+	"github.com/OpenSlides/vote-decrypt/grpc"
 	"github.com/alecthomas/kong"
 )
 
@@ -35,6 +36,8 @@ var (
 	envPostgresUser     = environment.NewVariable("VOTE_DATABASE_USER", "postgres", "Databasename of the postgres database used for long polls.")
 	envPostgresDatabase = environment.NewVariable("VOTE_DATABASE_NAME", "", "")
 	envPostgresPassword = environment.NewSecret("postgres_password", "Password of the postgres database used for long polls.")
+
+	envVoteDecryptService = environment.NewVariable("VOTE_DECRYPT_SERVICE", "localhost:9014", "Host and port of the decrypt service.")
 )
 
 var cli struct {
@@ -125,6 +128,8 @@ func initService(lookup environment.Environmenter) (func(context.Context) error,
 
 	fastBackendStarter, longBackendStarter := buildBackends(lookup)
 
+	decryptAddr := envVoteDecryptService.Value(lookup)
+
 	service := func(ctx context.Context) error {
 		for _, bg := range backgroundTasks {
 			go bg(ctx, handleError)
@@ -140,7 +145,13 @@ func initService(lookup environment.Environmenter) (func(context.Context) error,
 			return fmt.Errorf("start long backend: %w", err)
 		}
 
-		voteService := vote.New(fastBackend, longBackend, datastoreService)
+		decrypter, close, err := grpc.NewClient(decryptAddr)
+		if err != nil {
+			return fmt.Errorf("connection to vote decrypt service via grpc: %w", err)
+		}
+		defer close()
+
+		voteService := vote.New(fastBackend, longBackend, datastoreService, decrypter)
 
 		// Start http server.
 		log.Info("Listen on %s\n", listenAddr)
