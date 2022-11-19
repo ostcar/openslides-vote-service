@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/OpenSlides/openslides-autoupdate-service/pkg/datastore/dskey"
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/datastore/dsmock"
 	"github.com/OpenSlides/openslides-vote-service/internal/backends/memory"
 	"github.com/OpenSlides/openslides-vote-service/internal/vote"
@@ -18,12 +19,15 @@ import (
 func TestVoteStart(t *testing.T) {
 	t.Run("Not started poll", func(t *testing.T) {
 		backend := memory.New()
-		ds := dsmock.NewMockDatastore(dsmock.YAMLData(`
+		ds, _ := dsmock.NewMockDatastore(dsmock.YAMLData(`
 		organization/1/url: test.com
 		poll:
 			1:
 				meeting_id: 5
 				state: started
+				backend: fast
+				type: pseudoanonymous
+				pollmethod: Y
 
 		group/1/user_ids: [1]
 		user/1/is_present_in_meeting_ids: [1]
@@ -55,6 +59,8 @@ func TestVoteStart(t *testing.T) {
 				meeting_id: 5
 				type: named
 				state: started
+				backend: fast
+				pollmethod: Y
 
 		group/1/user_ids: [1]
 		user/1/is_present_in_meeting_ids: [1]
@@ -77,6 +83,8 @@ func TestVoteStart(t *testing.T) {
 				meeting_id: 5
 				type: named
 				state: started
+				backend: fast
+				pollmethod: Y
 
 		group/1/user_ids: [1]
 		user/1/is_present_in_meeting_ids: [1]
@@ -102,6 +110,8 @@ func TestVoteStart(t *testing.T) {
 				meeting_id: 5
 				type: analog
 				state: started
+				backend: fast
+				pollmethod: Y
 
 		group/1/user_ids: [1]
 		user/1/is_present_in_meeting_ids: [1]
@@ -124,6 +134,8 @@ func TestVoteStart(t *testing.T) {
 				meeting_id: 5
 				type: named
 				state: created
+				backend: fast
+				pollmethod: Y
 
 		group/1/user_ids: [1]
 		user/1/is_present_in_meeting_ids: [1]
@@ -146,6 +158,8 @@ func TestVoteStart(t *testing.T) {
 				meeting_id: 5
 				type: named
 				state: finished
+				backend: fast
+				pollmethod: Y
 
 		group/1/user_ids: [1]
 		user/1/is_present_in_meeting_ids: [1]
@@ -167,6 +181,8 @@ func TestVoteStart(t *testing.T) {
 				meeting_id: 5
 				type: named
 				state: published
+				backend: fast
+				pollmethod: Y
 
 		group/1/user_ids: [1]
 		user/1/is_present_in_meeting_ids: [1]
@@ -183,12 +199,15 @@ func TestVoteStart(t *testing.T) {
 
 func TestVoteStartPreloadData(t *testing.T) {
 	backend := memory.New()
-	ds := dsmock.NewMockDatastore(dsmock.YAMLData(`
+	ds, _ := dsmock.NewMockDatastore(dsmock.YAMLData(`
 	organization/1/url: test.com
 	poll/1:
 		meeting_id: 5
 		entitled_group_ids: [1]
 		state: started
+		backend: fast
+		type: pseudoanonymous
+		pollmethod: Y
 	
 	group:
 		1:
@@ -206,7 +225,7 @@ func TestVoteStartPreloadData(t *testing.T) {
 		t.Errorf("Start returned unexpected error: %v", err)
 	}
 
-	if !ds.KeysRequested(MustKey("poll/1/meeting_id"), MustKey("user/1/is_present_in_meeting_ids"), MustKey("user/2/is_present_in_meeting_ids")) {
+	if !ds.KeysRequested(dskey.MustKey("poll/1/meeting_id"), dskey.MustKey("user/1/is_present_in_meeting_ids"), dskey.MustKey("user/2/is_present_in_meeting_ids")) {
 		t.Fatalf("Not all keys where preloaded.")
 	}
 }
@@ -226,9 +245,22 @@ func TestVoteStop(t *testing.T) {
 	backend := memory.New()
 	v := vote.New(backend, backend, &StubGetter{data: dsmock.YAMLData(`
 	organization/1/url: test.com
-	poll/1/meeting_id: 1
-	poll/2/meeting_id: 1
-	poll/3/meeting_id: 1
+	poll:
+		1:
+			meeting_id: 1
+			backend: fast
+			type: pseudoanonymous
+			pollmethod: Y
+		2:
+			meeting_id: 1
+			backend: fast
+			type: pseudoanonymous
+			pollmethod: Y
+		3:
+			meeting_id: 1
+			backend: fast
+			type: pseudoanonymous
+			pollmethod: Y
 	`)}, new(decrypterStub))
 
 	t.Run("Unknown poll", func(t *testing.T) {
@@ -402,6 +434,8 @@ func TestVoteVote(t *testing.T) {
 			entitled_group_ids: [1]
 			pollmethod: Y
 			global_yes: true
+			backend: fast
+			type: pseudoanonymous
 		
 		meeting/1/id: 1
 
@@ -497,6 +531,8 @@ func TestVoteNoRequests(t *testing.T) {
 				pollmethod: Y
 				global_yes: true
 				state: started
+				backend: fast
+				type: pseudoanonymous
 			
 			meeting/50/users_enable_vote_delegations: true
 
@@ -518,6 +554,8 @@ func TestVoteNoRequests(t *testing.T) {
 				pollmethod: Y
 				global_yes: true
 				state: started
+				backend: fast
+				type: pseudoanonymous
 			
 			meeting/50/users_enable_vote_delegations: true
 
@@ -542,6 +580,8 @@ func TestVoteNoRequests(t *testing.T) {
 				pollmethod: Y
 				global_yes: true
 				state: started
+				backend: fast
+				type: pseudoanonymous
 			
 			meeting/50:
 				users_enable_vote_weight: true
@@ -565,6 +605,8 @@ func TestVoteNoRequests(t *testing.T) {
 				pollmethod: Y
 				global_yes: true
 				state: started
+				backend: fast
+				type: pseudoanonymous
 			
 			meeting/50:
 				users_enable_vote_weight: true
@@ -583,7 +625,7 @@ func TestVoteNoRequests(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ds := dsmock.NewMockDatastore(dsmock.YAMLData(tt.data))
+			ds, _ := dsmock.NewMockDatastore(dsmock.YAMLData(tt.data))
 			backend := memory.New()
 			v := vote.New(backend, backend, ds, new(decrypterStub))
 
@@ -620,6 +662,8 @@ func TestVoteDelegationAndGroup(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			meeting/1/users_enable_vote_delegations: true
 
@@ -640,6 +684,8 @@ func TestVoteDelegationAndGroup(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			meeting/1/users_enable_vote_delegations: true				
 
@@ -660,6 +706,8 @@ func TestVoteDelegationAndGroup(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			meeting/1/users_enable_vote_delegations: true
 
@@ -680,6 +728,8 @@ func TestVoteDelegationAndGroup(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 			
 			meeting/1/users_enable_vote_delegations: true
 
@@ -700,6 +750,8 @@ func TestVoteDelegationAndGroup(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 			
 			meeting/1/users_enable_vote_delegations: false
 
@@ -720,6 +772,8 @@ func TestVoteDelegationAndGroup(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 			
 			meeting/1/users_enable_vote_delegations: true
 
@@ -740,6 +794,8 @@ func TestVoteDelegationAndGroup(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			meeting/1/users_enable_vote_delegations: true
 
@@ -759,6 +815,8 @@ func TestVoteDelegationAndGroup(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			meeting/1/users_enable_vote_delegations: true
 
@@ -780,6 +838,8 @@ func TestVoteDelegationAndGroup(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			meeting/1/users_enable_vote_delegations: false
 
@@ -801,6 +861,8 @@ func TestVoteDelegationAndGroup(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 			
 			meeting/1/users_enable_vote_delegations: true
 
@@ -822,6 +884,8 @@ func TestVoteDelegationAndGroup(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 			
 			meeting/1/users_enable_vote_delegations: true
 
@@ -876,6 +940,8 @@ func TestVoteWeight(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			meeting/1/id: 1
 
@@ -893,6 +959,8 @@ func TestVoteWeight(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			meeting/1/users_enable_vote_weight: true
 
@@ -910,6 +978,8 @@ func TestVoteWeight(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			meeting/1/users_enable_vote_weight: true
 
@@ -928,6 +998,8 @@ func TestVoteWeight(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			meeting/1/users_enable_vote_weight: true
 
@@ -948,6 +1020,8 @@ func TestVoteWeight(t *testing.T) {
 				entitled_group_ids: [1]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			meeting/1/users_enable_vote_weight: true
 
@@ -993,7 +1067,12 @@ func TestVoteWeight(t *testing.T) {
 func TestVotedPolls(t *testing.T) {
 	backend := memory.New()
 	ds := dsmock.Stub(dsmock.YAMLData(`---
-	poll/1/backend: memory
+	poll/1:
+		backend: memory
+		meeting_id: 1
+		type: pseudoanonymous
+		pollmethod: Y
+
 	user/5/id: 5
 	`))
 	v := vote.New(backend, backend, ds, new(decrypterStub))
@@ -1014,10 +1093,15 @@ func TestVotedPolls(t *testing.T) {
 func TestVotedPollsWithDelegation(t *testing.T) {
 	backend := memory.New()
 	ds := dsmock.Stub(dsmock.YAMLData(`---
-	poll/1/backend: memory
-	user/5/id: 5
-	user/5/vote_delegations_$_from_ids: ["8"]
-	user/5/vote_delegations_$8_from_ids: [11,12]
+	poll/1:
+		backend: memory
+		type: named
+		meeting_id: 40
+		pollmethod: Y
+
+	user/5:
+		vote_delegations_$_from_ids: ["8"]
+		vote_delegations_$8_from_ids: [11,12]
 	`))
 	v := vote.New(backend, backend, ds, new(decrypterStub))
 	backend.Start(context.Background(), 1)

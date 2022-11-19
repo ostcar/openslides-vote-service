@@ -3,7 +3,6 @@ package postgres
 import (
 	"bytes"
 	"context"
-	"database/sql/driver"
 	_ "embed" // Needed for file embedding
 	"encoding/binary"
 	"errors"
@@ -12,9 +11,9 @@ import (
 	"time"
 
 	"github.com/OpenSlides/openslides-vote-service/internal/log"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 //go:embed schema.sql
@@ -33,9 +32,9 @@ func New(ctx context.Context, url string, password string) (*Backend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid connection url: %w", err)
 	}
-	conf.LazyConnect = true
 
-	// Set the password. It could contains letters that are not supported by ParseConfig
+	// Set the password. It could contains letters that are not supported by
+	// ParseConfig
 	conf.ConnConfig.Password = password
 
 	// Fix issue with gbBouncer. The documentation says, that this make the
@@ -43,9 +42,9 @@ func New(ctx context.Context, url string, password string) (*Backend, error) {
 	// remove the connection pool here or not use bgBouncer at all.
 	//
 	// See https://github.com/OpenSlides/openslides-vote-service/pull/66
-	conf.ConnConfig.PreferSimpleProtocol = true
+	conf.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 
-	pool, err := pgxpool.ConnectConfig(ctx, conf)
+	pool, err := pgxpool.NewWithConfig(ctx, conf)
 	if err != nil {
 		return nil, fmt.Errorf("creating connection pool: %w", err)
 	}
@@ -117,8 +116,9 @@ func (b *Backend) voteOnce(ctx context.Context, pollID int, userID int, object [
 		log.Debug("SQL: End transaction for vote with error: %v", err)
 	}()
 
-	err = b.pool.BeginTxFunc(
+	err = pgx.BeginTxFunc(
 		ctx,
+		b.pool,
 		pgx.TxOptions{
 			IsoLevel: "REPEATABLE READ",
 		},
@@ -129,9 +129,9 @@ func (b *Backend) voteOnce(ctx context.Context, pollID int, userID int, object [
 			WHERE id = $1;
 			`
 			var stopped bool
-			var uIDs userIDList
+			var uIDsRaw []byte
 			log.Debug("SQL: `%s` (values: %d)", sql, pollID)
-			if err := tx.QueryRow(ctx, sql, pollID).Scan(&stopped, &uIDs); err != nil {
+			if err := tx.QueryRow(ctx, sql, pollID).Scan(&stopped, &uIDsRaw); err != nil {
 				if errors.Is(err, pgx.ErrNoRows) {
 					return doesNotExistError{fmt.Errorf("unknown poll")}
 				}
@@ -142,13 +142,23 @@ func (b *Backend) voteOnce(ctx context.Context, pollID int, userID int, object [
 				return stoppedError{fmt.Errorf("poll is stopped")}
 			}
 
+			uIDs, err := userIDListFromBytes(uIDsRaw)
+			if err != nil {
+				return fmt.Errorf("parsing user ids: %w", err)
+			}
+
 			if err := uIDs.add(int32(userID)); err != nil {
 				return fmt.Errorf("adding userID to voted users: %w", err)
 			}
 
+			uIDsRaw, err = uIDs.toBytes()
+			if err != nil {
+				return fmt.Errorf("converting user ids to bytes: %w", err)
+			}
+
 			sql = "UPDATE vote.poll SET user_ids = $1 WHERE id = $2;"
 			log.Debug("SQL: `%s` (values: [user_ids]), %d", sql, pollID)
-			if _, err := tx.Exec(ctx, sql, uIDs, pollID); err != nil {
+			if _, err := tx.Exec(ctx, sql, uIDsRaw, pollID); err != nil {
 				return fmt.Errorf("writing user ids: %w", err)
 			}
 
@@ -194,8 +204,9 @@ func (b *Backend) stopOnce(ctx context.Context, pollID int) (objects [][]byte, u
 		log.Debug("SQL: End transaction for vote with error: %v", err)
 	}()
 
-	err = b.pool.BeginTxFunc(
+	err = pgx.BeginTxFunc(
 		ctx,
+		b.pool,
 		pgx.TxOptions{
 			IsoLevel: "REPEATABLE READ",
 		},
@@ -250,10 +261,16 @@ func (b *Backend) stopOnce(ctx context.Context, pollID int) (objects [][]byte, u
 			FROM vote.poll
 			WHERE poll.id = $1;
 			`
-			var uIDs userIDList
-			if err := tx.QueryRow(ctx, sql, pollID).Scan(&uIDs); err != nil {
+			var rawUserIDs []byte
+			if err := tx.QueryRow(ctx, sql, pollID).Scan(&rawUserIDs); err != nil {
 				return fmt.Errorf("fetching poll data: %w", err)
 			}
+
+			uIDs, err := userIDListFromBytes(rawUserIDs)
+			if err != nil {
+				return fmt.Errorf("parsing user ids: %w", err)
+			}
+
 			for _, id := range uIDs {
 				users = append(users, int(id))
 			}
@@ -317,10 +334,16 @@ func (b *Backend) VotedPolls(ctx context.Context, pollIDs []int, userIDs []int) 
 	out := make(map[int][]int, len(pollIDs))
 	for rows.Next() {
 		var pid int
-		var uIDs userIDList
-		if err := rows.Scan(&pid, &uIDs); err != nil {
+		var rawUIDs []byte
+		if err := rows.Scan(&pid, &rawUIDs); err != nil {
 			return nil, fmt.Errorf("parsing row: %w", err)
 		}
+
+		uIDs, err := userIDListFromBytes(rawUIDs)
+		if err != nil {
+			return nil, fmt.Errorf("parsing user ids: %w", err)
+		}
+
 		for _, userID := range userIDs {
 			if uIDs.contains(int32(userID)) {
 				out[pid] = append(out[pid], userID)
@@ -365,6 +388,10 @@ func continueOnTransactionError(ctx context.Context, f func() error) error {
 	var err error
 	for ctx.Err() == nil {
 		err = f()
+		if err == nil {
+			break
+		}
+
 		var perr *pgconn.PgError
 		if !errors.As(err, &perr) {
 			break
@@ -381,27 +408,15 @@ func continueOnTransactionError(ctx context.Context, f func() error) error {
 
 type userIDList []int32
 
-func (u *userIDList) Scan(src interface{}) error {
-	if src == nil {
-		*u = []int32{}
-		return nil
+func userIDListFromBytes(raw []byte) (userIDList, error) {
+	ints := make([]int32, len(raw)/4)
+	if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &ints); err != nil {
+		return nil, fmt.Errorf("decoding user ids: %w", err)
 	}
-
-	bs, ok := src.([]byte)
-	if !ok {
-		return fmt.Errorf("can not assign %v (%T) to userIDs", src, src)
-	}
-
-	// TODO: Add more test that this is working.
-	ints := make([]int32, len(bs)/4)
-	if err := binary.Read(bytes.NewReader(bs), binary.LittleEndian, &ints); err != nil {
-		return fmt.Errorf("decoding user ids: %w", err)
-	}
-	*u = ints
-	return nil
+	return userIDList(ints), nil
 }
 
-func (u userIDList) Value() (driver.Value, error) {
+func (u userIDList) toBytes() ([]byte, error) {
 	buf := new(bytes.Buffer)
 	if err := binary.Write(buf, binary.LittleEndian, u); err != nil {
 		return nil, fmt.Errorf("encoding user id %v: %w", u, err)

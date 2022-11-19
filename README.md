@@ -9,8 +9,8 @@ for an electonic poll.
 ### With Golang
 
 ```
-go build ./cmd/vote
-./vote
+go build
+./openslides-vote-service
 ```
 
 
@@ -39,7 +39,7 @@ To restart the service when ever a source file has shanged, the tool
 
 ```
 go install github.com/githubnemo/CompileDaemon@latest
-CompileDaemon -log-prefix=false -build "go build ./cmd/vote" -command "./vote"
+CompileDaemon -log-prefix=false -build "go build" -command "./openslides-vote-service"
 ```
 
 The make target `build-dev` creates a docker image that uses this tool. The
@@ -186,46 +186,4 @@ dHR0dHR0dHR0ZWtmanRpd28zbmdrZGkxMjNuZmt3a3IK
 
 ## Configuration
 
-### Environment variables
-
-The Service uses the following environment variables:
-
-* `VOTE_PORT`: The port the vote service listens on. The default is `9013`. 
-* `VOTE_BACKEND_FAST`: The backend used for fast polls. Possible backends are
-  redis, postgres or memory. Default is `redis`.
-* `VOTE_BACKEND_LONG`: The backend used for long polls. Default is `postgres`.
-* `DATASTORE_READER_HOST`: Host of the datastore reader. The default is
-  `localhost`.
-* `DATASTORE_READER_PORT`: Port of the datastore reader. The default is `9010`.
-* `DATASTORE_READER_PROTOCOL`: Protocol of the datastore reader. The default is
-  `http`.
-* `MESSAGE_BUS_HOST`: Host of the redis server. The default is `localhost`.
-* `MESSAGE_BUS_PORT`: Port of the redis server. The default is `6379`.
-* `REDIS_TEST_CONN`: Test the redis connection on startup. Disable on the cloud
-  if redis needs more time to start then this service. The default is `true`.
-* `VOTE_REDIS_HOST`: Host of the redis used for the fast backend and the vote
-  config. Default is `localhost'.
-* `VOTE_REDIS_PORT`: Port of the redis host. Default is `6379`.
-* `VOTE_DATABASE_USER`: Username of the postgres database for the long running
-  backend. Default is `postgres`.
-* `VOTE_DATABASE_PASSWORD_FILE`: File that contains the password for the postgres 
-  database. If `OPENSLIDES_DEVELOPMENT` is true, then the string `openslides` is 
-  used as password. Default is `/run/secrets/vote_postgres_password`.
-* `VOTE_DATABASE_HOST`: Host of the postgres database. Default is `localhost`.
-* `VOTE_DATABASE_PORT`: Port of the postgres database. Default is `5432`.
-* `VOTE_DATABASE_NAME`: Name of the postgres database. Default is `vote`.
-* `AUTH`: Sets the type of the auth service. `fake` (default) or `ticket`.
-* `AUTH_HOST`: Host of the auth service. The default is `localhost`.
-* `AUTH_PORT`: Port of the auth service. The default is `9004`.
-* `AUTH_TOKEN_KEY_FILE`: File to read the auth token key. Only used when 
-  `OPENSLIDES_DEVELOPMENT` is not set. Default is `/run/secrets/auth_token_key`.
-* `AUTH_COOKIE_KEY_FILE`: File to read the auth cookie key. Only used when
-  `OPENSLIDES_DEVELOPMENT` is not set. Default is `/run/secrets/auth_cookie_key`.
-* `AUTH_PROTOCOL`: Protocol of the auth servicer. The default is `http`.
-* `VOTE_DECRYPT_SERVICE` full addr to the grpc vote decrypt server. The default is `localhost:9014`.
-* `OPENSLIDES_DEVELOPMENT`: If set, the service starts, even when secrets (see
-  below) are not given. The default is `false`. It also enables debug output.
-* `MAX_PARALLEL_KEYS`: Max keys that are send in one request to the datastore.
-  The default is `1000`.
-* `DATASTORE_TIMEOUT`: Time until a request to the datastore times out. The
-  default is `3s`.
+The service is configurated with environment variables. See [all environment varialbes](environment.md).

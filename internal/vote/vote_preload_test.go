@@ -25,6 +25,8 @@ func TestPreload(t *testing.T) {
 				entitled_group_ids: [30]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			group/30/user_ids: [50]
 
@@ -46,6 +48,8 @@ func TestPreload(t *testing.T) {
 				entitled_group_ids: [30,31]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			group/30/user_ids: [50]
 			group/31/user_ids: [50]
@@ -68,6 +72,8 @@ func TestPreload(t *testing.T) {
 				entitled_group_ids: [30]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			group/30/user_ids: [50,51]
 
@@ -94,6 +100,8 @@ func TestPreload(t *testing.T) {
 				entitled_group_ids: [30, 31]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			group/30/user_ids: [50]
 			group/31/user_ids: [51]
@@ -121,6 +129,8 @@ func TestPreload(t *testing.T) {
 				entitled_group_ids: [30, 31]
 				pollmethod: Y
 				global_yes: true
+				backend: fast
+				type: pseudoanonymous
 
 			group/30/user_ids: [50]
 			group/31/user_ids: [51]
