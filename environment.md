@@ -9,22 +9,24 @@ The Service uses the following environment variables:
 * `MESSAGE_BUS_HOST`: Host of the redis server. The default is `localhost`.
 * `MESSAGE_BUS_PORT`: Port of the redis server. The default is `6379`.
 * `DATASTORE_DATABASE_USER`: Postgres User. The default is `openslides`.
-* `OPENSLIDES_DEVELOPMENT`: If set, the service uses the default secrets. The default is `false`.
 * `DATASTORE_DATABASE_HOST`: Postgres Host. The default is `localhost`.
 * `DATASTORE_DATABASE_PORT`: Postgres Post. The default is `5432`.
 * `DATASTORE_DATABASE_NAME`: Postgres Database. The default is `openslides`.
+* `OPENSLIDES_DEVELOPMENT`: If set, the service uses the default secrets. The default is `false`.
+* `SECRETS_PATH`: Path where the secrets are stored. The default is `/run/secrets`.
 * `AUTH_PROTOCOL`: Protocol of the auth service. The default is `http`.
 * `AUTH_HOST`: Host of the auth service. The default is `localhost`.
 * `AUTH_PORT`: Port of the auth service. The default is `9004`.
 * `AUTH_Fake`: Use user id 1 for every request. Ignores all other auth environment variables. The default is `false`.
 * `VOTE_REDIS_HOST`: Host of the redis used for the fast backend. The default is `localhost`.
-* `VOTE_REDIS_PORT`: Port of the redis used for the fast backend. The default is `6370`.
+* `VOTE_REDIS_PORT`: Port of the redis used for the fast backend. The default is `6379`.
 * `VOTE_DATABASE_USER`: Databasename of the postgres database used for long polls. The default is `postgres`.
 * `VOTE_DATABASE_HOST`: Host of the postgres database used for long polls. The default is `localhost`.
 * `VOTE_DATABASE_PORT`: Port of the postgres database used for long polls. The default is `5432`.
 * `VOTE_DATABASE_NAME`:  The default is ``.
 * `VOTE_BACKEND_FAST`: The backend used for fast polls. Possible backends are redis, postgres or memory. The default is `redis`.
 * `VOTE_BACKEND_LONG`: The backend used for long polls. The default is `postgres`.
+* `VOTE_DECRYPT_SERVICE`: Host and port of the decrypt service. The default is `localhost:9014`.
 
 
 ## Secrets
