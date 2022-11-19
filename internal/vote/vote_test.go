@@ -335,6 +335,7 @@ func TestVoteStopCrypto(t *testing.T) {
 		pollmethod: YN
 		global_yes: true
 		global_no: true
+		backend: fast
 	`)
 	backend := memory.New()
 	v := vote.New(backend, backend, dsmock.Stub(data), new(decrypterStub))
@@ -375,6 +376,7 @@ func TestVoteStopCryptoInvalid(t *testing.T) {
 		pollmethod: YN
 		global_yes: true
 		global_no: true
+		backend: fast
 	`)
 	backend := memory.New()
 	v := vote.New(backend, backend, dsmock.Stub(data), new(decrypterStub))
