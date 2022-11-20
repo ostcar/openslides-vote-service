@@ -34,8 +34,8 @@ var (
 
 	envPostgresHost     = environment.NewVariable("VOTE_DATABASE_HOST", "localhost", "Host of the postgres database used for long polls.")
 	envPostgresPort     = environment.NewVariable("VOTE_DATABASE_PORT", "5432", "Port of the postgres database used for long polls.")
-	envPostgresUser     = environment.NewVariable("VOTE_DATABASE_USER", "postgres", "Databasename of the postgres database used for long polls.")
-	envPostgresDatabase = environment.NewVariable("VOTE_DATABASE_NAME", "", "")
+	envPostgresUser     = environment.NewVariable("VOTE_DATABASE_USER", "openslides", "Databasename of the postgres database used for long polls.")
+	envPostgresDatabase = environment.NewVariable("VOTE_DATABASE_NAME", "openslides", "")
 	envPostgresPassword = environment.NewSecret("postgres_password", "Password of the postgres database used for long polls.")
 
 	envVoteDecryptService = environment.NewVariable("VOTE_DECRYPT_SERVICE", "localhost:9014", "Host and port of the decrypt service.")
