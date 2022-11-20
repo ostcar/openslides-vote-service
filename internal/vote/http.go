@@ -22,7 +22,7 @@ const (
 )
 
 // Run starts the http service.
-func Run(ctx context.Context, addr string, auth authenticater, service *Vote) error {
+func Run(ctx context.Context, lst net.Listener, auth authenticater, service *Vote) error {
 	ticketProvider := func() (<-chan time.Time, func()) {
 		ticker := time.NewTicker(time.Second)
 		return ticker.C, ticker.Stop
@@ -39,7 +39,6 @@ func Run(ctx context.Context, addr string, auth authenticater, service *Vote) er
 	handleHealth(mux)
 
 	srv := &http.Server{
-		Addr:        addr,
 		Handler:     mux,
 		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
@@ -55,7 +54,7 @@ func Run(ctx context.Context, addr string, auth authenticater, service *Vote) er
 		wait <- nil
 	}()
 
-	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+	if err := srv.Serve(lst); err != http.ErrServerClosed {
 		// TODO EXTERNAL ERROR
 		return fmt.Errorf("HTTP Server failed: %v", err)
 	}

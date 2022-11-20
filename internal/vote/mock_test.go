@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/datastore/dskey"
@@ -74,4 +75,16 @@ func (d *decrypterStub) Clear(ctx context.Context, pollID string) error {
 
 func (d *decrypterStub) PublicMainKey(ctx context.Context) ([]byte, error) {
 	return []byte("pub_main_key"), nil
+}
+
+type autherStub struct {
+	userID int
+}
+
+func (a *autherStub) Authenticate(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+	return r.Context(), nil
+}
+
+func (a *autherStub) FromContext(context.Context) int {
+	return a.userID
 }
