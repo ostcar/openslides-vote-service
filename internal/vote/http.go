@@ -36,6 +36,7 @@ func Run(ctx context.Context, lst net.Listener, auth authenticater, service *Vot
 	handleVote(mux, service, auth)
 	handleVoted(mux, service, auth)
 	handleVoteCount(mux, service, ticketProvider)
+	handlePublicMainKey(mux, service)
 	handleHealth(mux)
 
 	srv := &http.Server{

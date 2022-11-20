@@ -31,7 +31,8 @@ func TestRun(t *testing.T) {
 
 	backend := memory.New()
 	ds := dsmock.Stub{}
-	service := vote.New(backend, backend, ds)
+	decrypt := new(decrypterStub)
+	service := vote.New(backend, backend, ds, decrypt)
 
 	getAddr := make(chan string)
 	go func() {
@@ -63,6 +64,7 @@ func TestRun(t *testing.T) {
 			"/system/vote/voted",
 			"/internal/vote/vote_count",
 			"/system/vote/health",
+			"/internal/vote/public_main_key",
 		} {
 			resp, err := http.Get(fmt.Sprintf("http://%s%s", addr, url))
 			if err != nil {
