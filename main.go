@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	golog "log"
+	"net"
 	"os"
 
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/auth"
@@ -142,9 +143,14 @@ func initService(lookup environment.Environmenter) (func(context.Context) error,
 
 		voteService := vote.New(fastBackend, longBackend, datastoreService)
 
+		lst, err := net.Listen("tcp", listenAddr)
+		if err != nil {
+			return fmt.Errorf("open %s: %w", listenAddr, err)
+		}
+
 		// Start http server.
 		log.Info("Listen on %s\n", listenAddr)
-		return vote.Run(ctx, listenAddr, authService, voteService)
+		return vote.Run(ctx, lst, authService, voteService)
 	}
 
 	return service, nil

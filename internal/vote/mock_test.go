@@ -2,6 +2,7 @@ package vote_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/datastore/dskey"
@@ -36,4 +37,16 @@ func (g *StubGetter) assertKeys(t *testing.T, keys ...dskey.Key) {
 			t.Errorf("Key %s is was not requested", key)
 		}
 	}
+}
+
+type autherStub struct {
+	userID int
+}
+
+func (a *autherStub) Authenticate(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+	return r.Context(), nil
+}
+
+func (a *autherStub) FromContext(context.Context) int {
+	return a.userID
 }
