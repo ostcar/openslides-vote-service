@@ -7,7 +7,7 @@ require (
 	github.com/OpenSlides/vote-decrypt v0.0.0-20221012082621-2bbd25022db1
 	github.com/alecthomas/kong v0.7.1
 	github.com/gomodule/redigo v1.8.9
-	github.com/jackc/pgx/v5 v5.1.1
+	github.com/jackc/pgx/v5 v5.2.0
 	github.com/ory/dockertest/v3 v3.9.1
 )
 
