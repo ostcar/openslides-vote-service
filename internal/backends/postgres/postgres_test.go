@@ -20,7 +20,7 @@ func startPostgres(t *testing.T) (string, func()) {
 
 	runOpts := dockertest.RunOptions{
 		Repository: "postgres",
-		Tag:        "11",
+		Tag:        "13",
 		Env: []string{
 			"POSTGRES_USER=postgres",
 			"POSTGRES_PASSWORD=password",
