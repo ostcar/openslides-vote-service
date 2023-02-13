@@ -7,6 +7,7 @@ import (
 	golog "log"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/auth"
 	"github.com/OpenSlides/openslides-autoupdate-service/pkg/datastore"
@@ -175,6 +176,15 @@ func handleError(err error) {
 	log.Info("Error: %v", err)
 }
 
+// encodePostgresConfig encodes a string to be used in the postgres key value style.
+//
+// See: https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+func encodePostgresConfig(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `'`, `\'`)
+	return s
+}
+
 func buildBackends(lookup environment.Environmenter) (fast, long func(context.Context) (vote.Backend, error)) {
 	// All environment variables have to be called in this function and not in a
 	// sub function. In other case they will not be included in the generated
@@ -196,15 +206,16 @@ func buildBackends(lookup environment.Environmenter) (fast, long func(context.Co
 	}
 
 	postgresAddr := fmt.Sprintf(
-		"postgres://%s@%s:%s/%s",
-		envPostgresUser.Value(lookup),
-		envPostgresHost.Value(lookup),
-		envPostgresPort.Value(lookup),
-		envPostgresDatabase.Value(lookup),
+		`user='%s' password='%s' host='%s' port='%s' dbname='%s'`,
+		encodePostgresConfig(envPostgresUser.Value(lookup)),
+		encodePostgresConfig(envPostgresPassword.Value(lookup)),
+		encodePostgresConfig(envPostgresHost.Value(lookup)),
+		encodePostgresConfig(envPostgresPort.Value(lookup)),
+		encodePostgresConfig(envPostgresDatabase.Value(lookup)),
 	)
-	postgresPassword := envPostgresPassword.Value(lookup)
+
 	buildPostgres := func(ctx context.Context) (vote.Backend, error) {
-		p, err := postgres.New(ctx, postgresAddr, postgresPassword)
+		p, err := postgres.New(ctx, postgresAddr)
 		if err != nil {
 			return nil, fmt.Errorf("creating postgres connection pool: %w", err)
 		}
