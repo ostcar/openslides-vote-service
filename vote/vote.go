@@ -830,15 +830,31 @@ func rewriteBallotsPostgres(ctx context.Context, tx pgx.Tx, pollID int) error {
 	}
 
 	query := `
-		WITH deleted_ballots AS (
-			DELETE FROM poll_ballot_t
-			WHERE poll_id = $1
-			RETURNING weight, split, value, poll_id
-		)
-		INSERT INTO poll_ballot_t (weight, split, value, poll_id)
-		SELECT weight, split, value, poll_id
-		FROM deleted_ballots
-		ORDER BY value ASC;`
+	WITH payload AS (
+	    SELECT
+	        weight,
+	        split,
+	        value,
+	        ROW_NUMBER() OVER (ORDER BY value ASC, value ASC, split ASC)
+	    FROM poll_ballot_t
+	    WHERE poll_id = $1
+	),
+	targets AS (
+	    SELECT
+	        id,
+	        ROW_NUMBER() OVER (ORDER BY id ASC)
+	    FROM poll_ballot_t
+	    WHERE poll_id = $1
+	)
+	UPDATE poll_ballot_t
+	SET
+	    weight = payload.weight,
+	    split = payload.split,
+	    value = payload.value,
+		poll_ballot_user_id = null
+	FROM targets
+	JOIN payload ON targets.row_number = payload.row_number
+	WHERE poll_ballot_t.id = targets.id;`
 
 	if _, err := tx.Exec(ctx, query, pollID); err != nil {
 		return fmt.Errorf("rewrite and anonymize ballots: %w", err)
