@@ -1073,51 +1073,66 @@ func (v *Vote) Vote(ctx context.Context, pollID, requestUserID int, r io.Reader)
 		}
 	}
 
-	tx, err := v.querier.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	query := `WITH
+    poll_check AS (
+        SELECT
+            id,
+            state,
+            CASE
+                WHEN state != 'started' THEN 'POLL_NOT_STARTED'
+                ELSE 'POLL_VALID'
+            END AS poll_status
+        FROM poll_t
+        WHERE id = $1
+        FOR KEY SHARE
+    ),
+    inserted_ballot_user AS (
+        INSERT INTO poll_ballot_user_t (poll_id, acting_meeting_user_id, represented_meeting_user_id)
+        SELECT $1, $2, $3
+        FROM poll_check
+        WHERE poll_check.poll_status = 'POLL_VALID'
+        RETURNING id
+    ),
+    inserted_ballot AS (
+        INSERT INTO poll_ballot_t (poll_id, value, weight, poll_ballot_user_id)
+        SELECT $1, $4, $5, id
+        FROM inserted_ballot_user
+        RETURNING id
+    )
+	SELECT
+    CASE
+        WHEN inserted_ballot.id IS NOT NULL THEN 'VALID'
+        WHEN poll_check.poll_status IS NOT NULL THEN poll_check.poll_status
+        ELSE 'POLL_NOT_EXISTS'
+    END AS status
+	FROM poll_check
+	LEFT JOIN inserted_ballot ON true;`
+
+	var result string
+	err = v.querier.QueryRow(ctx, query, pollID, actingMeetingUserID, representedMeetingUserID, ballotValue, weight).Scan(&result)
 	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == PgErrUniqueViolation {
+				return MessageErrorf(ErrDoubleVote, "You can not vote again on poll %d", pollID)
+			}
 
-	var state string
-	if err := tx.QueryRow(ctx, "SELECT state FROM poll_t WHERE id = $1 FOR KEY SHARE", pollID).Scan(&state); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return MessageErrorf(ErrNotExists, "Poll %d does not exist", pollID)
+			if pgErr.Code == PgErrForeignKeyViolation {
+				return MessageErrorf(ErrNotExists, "Poll %d does not exist", pollID)
+			}
 		}
-		return fmt.Errorf("get poll state: %w", err)
+		return fmt.Errorf("vote query: %w", err)
 	}
 
-	if state != "started" {
+	switch result {
+	case "VALID":
+		return nil
+	case "POLL_NOT_STARTED":
 		return MessageErrorf(ErrNotStarted, "Poll %d is not started", pollID)
+	case "POLL_NOT_EXISTS":
+		return MessageErrorf(ErrNotExists, "Poll %d does not exist", pollID)
 	}
-
-	// On the poll_ballot_user_t table, there is a constrain
-	// UNIQUE (poll_id, represented_meeting_user_id)
-	insertBallotUserSQL := `
-    INSERT INTO poll_ballot_user_t (poll_id, acting_meeting_user_id, represented_meeting_user_id)
-    VALUES ($1, $2, $3)
-    ON CONFLICT (poll_id, represented_meeting_user_id) DO NOTHING
-    RETURNING id`
-	var ballotUserID int
-	if err := tx.QueryRow(ctx, insertBallotUserSQL, pollID, actingMeetingUserID, representedMeetingUserID).Scan(&ballotUserID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return MessageErrorf(ErrDoubleVote, "You can not vote again on poll %d", pollID)
-		}
-		return fmt.Errorf("insert ballot user: %w", err)
-	}
-
-	insertBallotSQL := `INSERT INTO poll_ballot_t (poll_id, value, weight, poll_ballot_user_id) VALUES ($1, $2, $3, $4)`
-	if _, err := tx.Exec(ctx, insertBallotSQL,
-		pollID, ballotValue, weight, ballotUserID,
-	); err != nil {
-		return fmt.Errorf("insert ballot: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
-	}
-
-	return nil
+	return fmt.Errorf("unknown error: %v", result)
 }
 
 // encryptBallot encrypts the given value with AES using the key for secret polls.
@@ -1495,3 +1510,8 @@ type DBQuerier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
+
+const (
+	PgErrUniqueViolation     = "23505"
+	PgErrForeignKeyViolation = "23503"
+)
