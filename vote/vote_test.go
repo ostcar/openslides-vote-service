@@ -669,97 +669,8 @@ func TestManually(t *testing.T) {
 			if !errors.Is(err, vote.ErrInvalid) {
 				t.Errorf("Update with invalid json returned an unexpected error: %v", err)
 			}
-
 		})
 	})
-}
-
-func TestVote(t *testing.T) {
-	t.Parallel()
-
-	if testing.Short() {
-		t.Skip("Postgres Test")
-	}
-
-	ctx := t.Context()
-
-	pg, err := pgtest.NewPostgresTest(t)
-	if err != nil {
-		t.Fatalf("Error starting postgres: %v", err)
-	}
-
-	data := `---
-	motion/5:
-		meeting_id: 1
-		sequential_number: 1
-		title: my motion
-		state_id: 1
-
-	list_of_speakers/7:
-		content_object_id: motion/5
-		sequential_number: 1
-		meeting_id: 1
-
-	meeting/1:
-		present_user_ids: [30]
-
-	user/30:
-		username: tom
-	meeting_user/300:
-		group_ids: [40]
-		user_id: 30
-		meeting_id: 1
-
-	group/40:
-		name: delegate
-		meeting_id: 1
-
-	poll_config_approval/77:
-		allow_abstain: true
-		onehundred_percent_base: valid
-
-	poll/5:
-		title: my poll
-		config_id: poll_config_approval/77
-		visibility: open
-		sequential_number: 1
-		content_object_id: motion/5
-		meeting_id: 1
-		state: started
-		entitled_group_ids: [40]
-	`
-
-	withData(
-		t,
-		pg,
-		data,
-		func(service *vote.Vote, flow flow.Flow) {
-			t.Run("Simple Vote", func(t *testing.T) {
-				body := `{"value":"Yes"}`
-				if err := service.Vote(ctx, 5, 30, strings.NewReader(body)); err != nil {
-					t.Fatalf("Error processing poll: %v", err)
-				}
-
-				ds := dsmodels.New(flow)
-				ballot, err := ds.PollBallot(1).First(t.Context())
-				if err != nil {
-					t.Fatalf("Error: Getting ballot: %v", err)
-				}
-				ballotUser, err := ds.PollBallotUser(1).First(t.Context())
-				if err != nil {
-					t.Fatalf("Error: Getting ballot_user: %v", err)
-				}
-
-				if v, ok := ballotUser.ActingMeetingUserID.Value(); ok && v != 300 {
-					t.Errorf("Expected acting_meeting_user ID to be 300, got %d", v)
-				}
-
-				if ballot.Value != `"Yes"` {
-					t.Errorf("Expected vote value to be 'Yes', got '%s'", ballot.Value)
-				}
-			})
-		},
-	)
 }
 
 func TestVoteWeight(t *testing.T) {
@@ -1787,10 +1698,28 @@ func TestVoteVote(t *testing.T) {
 				}
 			})
 
-			t.Run("Valid data", func(t *testing.T) {
-				err := service.Vote(ctx, 5, 30, strings.NewReader(`{"value":"Yes"}`))
+			t.Run("Simple Vote", func(t *testing.T) {
+				body := `{"value":"Yes"}`
+				if err := service.Vote(ctx, 5, 30, strings.NewReader(body)); err != nil {
+					t.Fatalf("Error processing poll: %v", err)
+				}
+
+				ds := dsmodels.New(flow)
+				ballot, err := ds.PollBallot(1).First(t.Context())
 				if err != nil {
-					t.Fatalf("Vote returned unexpected error: %v", err)
+					t.Fatalf("Error: Getting ballot: %v", err)
+				}
+				ballotUser, err := ds.PollBallotUser(1).First(t.Context())
+				if err != nil {
+					t.Fatalf("Error: Getting ballot_user: %v", err)
+				}
+
+				if v, ok := ballotUser.ActingMeetingUserID.Value(); ok && v != 300 {
+					t.Errorf("Expected acting_meeting_user ID to be 300, got %d", v)
+				}
+
+				if ballot.Value != `"Yes"` {
+					t.Errorf("Expected vote value to be 'Yes', got '%s'", ballot.Value)
 				}
 			})
 
@@ -1807,6 +1736,17 @@ func TestVoteVote(t *testing.T) {
 
 				if errTyped != vote.ErrDoubleVote {
 					t.Errorf("Got error type `%s`, expected `%s`", errTyped.Type(), vote.ErrDoubleVote.Type())
+				}
+
+				ds := dsmodels.New(flow)
+				ballot, err := ds.Poll(5).First(t.Context())
+
+				if len(ballot.BallotIDs) != 1 {
+					t.Errorf("Expected 1 ballot ID, got %d", len(ballot.BallotIDs))
+				}
+
+				if len(ballot.BallotUserIDs) != 1 {
+					t.Errorf("Expected 1 ballot user ID, got %d", len(ballot.BallotUserIDs))
 				}
 			})
 
@@ -1827,6 +1767,17 @@ func TestVoteVote(t *testing.T) {
 
 				if errTyped != vote.ErrNotStarted {
 					t.Errorf("Got error type `%s`, expected `%s`", errTyped.Type(), vote.ErrNotStarted.Type())
+				}
+
+				ds := dsmodels.New(flow)
+				ballot, err := ds.Poll(5).First(t.Context())
+
+				if len(ballot.BallotIDs) != 1 {
+					t.Errorf("Expected 1 ballot ID, got %d", len(ballot.BallotIDs))
+				}
+
+				if len(ballot.BallotUserIDs) != 1 {
+					t.Errorf("Expected 1 ballot user ID, got %d", len(ballot.BallotUserIDs))
 				}
 			})
 		},
