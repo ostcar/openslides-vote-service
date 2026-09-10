@@ -152,6 +152,10 @@ func ConfigDelete(ctx context.Context, tx pgx.Tx, configID string) error {
 	return nil
 }
 
+// RequireOptions returns whether the method type requires options.
+//
+// At the moment, this is true for `rating_approval`, `rating_score` and
+// `selection`. It is false for `approval`.
 func RequireOptions(methodStr string) (bool, error) {
 	method, err := methodFromString(methodStr)
 	if err != nil {
@@ -321,6 +325,7 @@ type InvalidBallotError struct {
 	msg string
 }
 
+// Type implements the Typer interface so client gets nice error messages.
 func (InvalidBallotError) Type() string {
 	return "invalid_ballot"
 }

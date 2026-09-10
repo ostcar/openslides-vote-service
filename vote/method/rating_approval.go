@@ -225,7 +225,7 @@ func (ra RatingApproval) ValidateBallot(vote json.RawMessage) error {
 		}
 
 		if maxYesSet && strings.ToLower(string(choice)) == `"yes"` {
-			countYes += 1
+			countYes++
 		}
 	}
 
