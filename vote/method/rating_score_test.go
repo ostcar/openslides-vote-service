@@ -67,6 +67,22 @@ func TestRatingScoreValidateVote(t *testing.T) {
 			expectValid: true,
 		},
 		{
+			name:        "Rating Score min_options_amount with abstain",
+			method:      "rating_score",
+			config:      `{"min_options_amount":1,"allow_abstain":true}`,
+			options:     []int{1, 2},
+			vote:        `{}`,
+			expectValid: true,
+		},
+		{
+			name:        "Rating Score min_options_amount with out abstain",
+			method:      "rating_score",
+			config:      `{"min_options_amount":1,"allow_abstain":false}`,
+			options:     []int{1, 2},
+			vote:        `{}`,
+			expectValid: false,
+		},
+		{
 			name:        "Rating Score min_options_amount too few",
 			method:      "rating_score",
 			config:      `{"min_options_amount":2}`,
