@@ -254,6 +254,10 @@ func (rs RatingScore) ValidateBallot(vote json.RawMessage) error {
 		return invalidVote("too many options")
 	}
 
+	if rs.AllowAbstain && len(choice) == 0 {
+		return invalidVote("abstain not allowed")
+	}
+
 	if value, set := rs.MinOptionsAmount.Value(); set && len(choice) < value {
 		if !(rs.AllowAbstain && len(choice) == 0) {
 			return invalidVote("too few options")
