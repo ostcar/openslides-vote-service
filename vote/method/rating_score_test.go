@@ -12,7 +12,6 @@ import (
 func TestRatingScoreValidateVote(t *testing.T) {
 	for _, tt := range []struct {
 		name        string
-		method      string
 		config      string
 		options     []int
 		vote        string
@@ -20,7 +19,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 	}{
 		{
 			name:        "Rating Score",
-			method:      "rating_score",
 			config:      `{}`,
 			options:     []int{1, 2},
 			vote:        `{"1":3}`,
@@ -28,7 +26,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score invalid key",
-			method:      "rating_score",
 			config:      `{}`,
 			options:     []int{1, 2},
 			vote:        `{"0":3}`,
@@ -36,7 +33,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score with negative value",
-			method:      "rating_score",
 			config:      `{}`,
 			options:     []int{1, 2},
 			vote:        `{"1":-3}`,
@@ -44,7 +40,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score max_options_amount",
-			method:      "rating_score",
 			config:      `{"max_options_amount":1}`,
 			options:     []int{1, 2},
 			vote:        `{"1":3}`,
@@ -52,7 +47,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score max_options_amount too many",
-			method:      "rating_score",
 			config:      `{"max_options_amount":1}`,
 			options:     []int{1, 2},
 			vote:        `{"1":3, "2":1}`,
@@ -60,7 +54,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score min_options_amount",
-			method:      "rating_score",
 			config:      `{"min_options_amount":1}`,
 			options:     []int{1, 2},
 			vote:        `{"1":3}`,
@@ -68,7 +61,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score min_options_amount with abstain",
-			method:      "rating_score",
 			config:      `{"min_options_amount":1,"allow_abstain":true}`,
 			options:     []int{1, 2},
 			vote:        `{}`,
@@ -76,15 +68,20 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score min_options_amount with out abstain",
-			method:      "rating_score",
 			config:      `{"min_options_amount":1,"allow_abstain":false}`,
 			options:     []int{1, 2},
 			vote:        `{}`,
 			expectValid: false,
 		},
 		{
+			name:        "min_options_amount == 0 with no abstain",
+			config:      `{"min_options_amount":0,"allow_abstain":false}`,
+			options:     []int{1, 2},
+			vote:        `{}`,
+			expectValid: false,
+		},
+		{
 			name:        "Rating Score min_options_amount too few",
-			method:      "rating_score",
 			config:      `{"min_options_amount":2}`,
 			options:     []int{1, 2},
 			vote:        `{"1":3}`,
@@ -92,7 +89,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score max_votes_per_option",
-			method:      "rating_score",
 			config:      `{"max_votes_per_option":2}`,
 			options:     []int{1, 2},
 			vote:        `{"1":2}`,
@@ -100,7 +96,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score max_votes_per_option too many",
-			method:      "rating_score",
 			config:      `{"max_votes_per_option":2}`,
 			options:     []int{1, 2},
 			vote:        `{"1":3}`,
@@ -108,7 +103,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score max_vote_sum",
-			method:      "rating_score",
 			config:      `{"max_vote_sum":5}`,
 			options:     []int{1, 2},
 			vote:        `{"1":3}`,
@@ -116,7 +110,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score max_vote_sum too many",
-			method:      "rating_score",
 			config:      `{"max_vote_sum":5}`,
 			options:     []int{1, 2},
 			vote:        `{"1":6}`,
@@ -124,7 +117,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score max_vote_sum too many on different options",
-			method:      "rating_score",
 			config:      `{"max_vote_sum":5}`,
 			options:     []int{1, 2},
 			vote:        `{"1":3, "2":3}`,
@@ -132,7 +124,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score min_vote_sum on one vote",
-			method:      "rating_score",
 			config:      `{"min_vote_sum":10}`,
 			options:     []int{1, 2},
 			vote:        `{"1":5}`,
@@ -140,7 +131,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score min_vote_sum on many votes",
-			method:      "rating_score",
 			config:      `{"min_vote_sum":10}`,
 			options:     []int{1, 2},
 			vote:        `{"1":5, "2":4}`,
@@ -148,7 +138,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Rating Score min_vote_sum enough",
-			method:      "rating_score",
 			config:      `{"min_vote_sum":1}`,
 			options:     []int{1, 2},
 			vote:        `{"1":5, "2":5}`,
@@ -156,7 +145,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "min_votes_sum but allow_abstain",
-			method:      "rating_score",
 			config:      `{"min_vote_sum":2,"allow_abstain":true}`,
 			options:     []int{1, 2},
 			vote:        `{}`,
@@ -164,7 +152,6 @@ func TestRatingScoreValidateVote(t *testing.T) {
 		},
 		{
 			name:        "min_votes_sum but not allow_abstain",
-			method:      "rating_score",
 			config:      `{"min_vote_sum":2,"allow_abstain":false}`,
 			options:     []int{1, 2},
 			vote:        `{}`,

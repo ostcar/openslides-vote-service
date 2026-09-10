@@ -12,7 +12,6 @@ import (
 func TestSelectionValidateVote(t *testing.T) {
 	for _, tt := range []struct {
 		name        string
-		method      string
 		config      string
 		options     []int
 		vote        string
@@ -20,7 +19,6 @@ func TestSelectionValidateVote(t *testing.T) {
 	}{
 		{
 			name:        "Selection invalid json",
-			method:      "selection",
 			config:      `{}`,
 			options:     []int{1, 2},
 			vote:        `[0`,
@@ -28,7 +26,6 @@ func TestSelectionValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Selection",
-			method:      "selection",
 			config:      `{}`,
 			options:     []int{1, 2},
 			vote:        `[1]`,
@@ -36,7 +33,6 @@ func TestSelectionValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Selection same value multiple times",
-			method:      "selection",
 			config:      `{}`,
 			options:     []int{1, 2},
 			vote:        `[1,1]`,
@@ -44,7 +40,6 @@ func TestSelectionValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Selection unknown key",
-			method:      "selection",
 			config:      `{}`,
 			options:     []int{1, 2},
 			vote:        `[3]`,
@@ -52,7 +47,6 @@ func TestSelectionValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Selection max_options_amount",
-			method:      "selection",
 			config:      `{"max_options_amount":1}`,
 			options:     []int{1, 2},
 			vote:        `[1]`,
@@ -60,7 +54,6 @@ func TestSelectionValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Selection max_options_amount too many",
-			method:      "selection",
 			config:      `{"max_options_amount":1}`,
 			options:     []int{1, 2},
 			vote:        `[1,2]`,
@@ -68,7 +61,6 @@ func TestSelectionValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Selection min_options_amount",
-			method:      "selection",
 			config:      `{"min_options_amount":1}`,
 			options:     []int{1, 2},
 			vote:        `[1]`,
@@ -76,7 +68,6 @@ func TestSelectionValidateVote(t *testing.T) {
 		},
 		{
 			name:        "Selection min_options_amount too few",
-			method:      "selection",
 			config:      `{"min_options_amount":2}`,
 			options:     []int{1, 2},
 			vote:        `[1]`,
@@ -84,7 +75,6 @@ func TestSelectionValidateVote(t *testing.T) {
 		},
 		{
 			name:        "min_options_amount too few but allow_abstain",
-			method:      "selection",
 			config:      `{"min_options_amount":2,"allow_abstain":true}`,
 			options:     []int{1, 2},
 			vote:        `[]`,
@@ -92,15 +82,20 @@ func TestSelectionValidateVote(t *testing.T) {
 		},
 		{
 			name:        "min_options_amount too few but not allow_abstain",
-			method:      "selection",
 			config:      `{"min_options_amount":2,"allow_abstain":false}`,
 			options:     []int{1, 2},
 			vote:        `[]`,
 			expectValid: false,
 		},
 		{
+			name:        "min_options_amount == 0 with no abstain",
+			config:      `{"min_options_amount":0,"allow_abstain":false}`,
+			options:     []int{1, 2},
+			vote:        `{}`,
+			expectValid: false,
+		},
+		{
 			name:        "Selection nota",
-			method:      "selection",
 			config:      `{"min_options_amount":2,"allow_nota":true}`,
 			options:     []int{1, 2},
 			vote:        `"nota"`,

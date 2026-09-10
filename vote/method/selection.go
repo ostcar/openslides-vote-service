@@ -239,7 +239,7 @@ func (s Selection) ValidateBallot(vote json.RawMessage) error {
 		return invalidVote("too many options")
 	}
 
-	if s.AllowAbstain && len(choice) == 0 {
+	if !s.AllowAbstain && len(choice) == 0 {
 		return invalidVote("abstain not allowed")
 	}
 
