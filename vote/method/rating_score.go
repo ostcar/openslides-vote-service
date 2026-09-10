@@ -15,7 +15,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// RatingScoreFromRequest creates a RatingScore from a request.
+// RatingScore represents a rating score method.
 type RatingScore struct {
 	Options           []int              `json:"options"`
 	MaxOptionsAmount  dsfetch.Maybe[int] `json:"max_options_amount"`
@@ -23,11 +23,13 @@ type RatingScore struct {
 	MaxVotesPerOption dsfetch.Maybe[int] `json:"max_votes_per_option"`
 	MaxVoteSum        dsfetch.Maybe[int] `json:"max_vote_sum"`
 	MinVoteSum        dsfetch.Maybe[int] `json:"min_vote_sum"`
+	AllowAbstain      bool               `json:"allow_abstain"`
 }
 
 // RatingScoreFromJson parses the given JSON config into a RatingScore struct.
 func RatingScoreFromJson(config string) (*RatingScore, error) {
 	var cfg RatingScore
+	cfg.AllowAbstain = true
 	if err := json.Unmarshal([]byte(config), &cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
@@ -53,6 +55,7 @@ func RatingScoreFromDsModels(configDB dsmodels.PollConfigRatingScore, optionIDs 
 		MaxVotesPerOption: maybeZeroIsNull(configDB.MaxVotesPerOption),
 		MaxVoteSum:        maybeZeroIsNull(configDB.MaxVoteSum),
 		MinVoteSum:        maybeZeroIsNull(configDB.MinVoteSum),
+		AllowAbstain:      configDB.AllowAbstain,
 	}
 }
 
@@ -62,6 +65,7 @@ type ratingScoreConfig struct {
 	MaxVotesPerOption     *int    `json:"max_votes_per_option"`
 	MaxVoteSum            *int    `json:"max_vote_sum"`
 	MinVoteSum            *int    `json:"min_vote_sum"`
+	AllowAbstain          *bool   `json:"allow_abstain"`
 	OneHundredPercentBase *string `json:"onehundred_percent_base"`
 	RequiredMajority      *string `json:"required_majority"`
 }
@@ -96,6 +100,10 @@ func ratingScoreForCreate(config json.RawMessage, optionAmount int) (*ratingScor
 	if *cfg.MinVoteSum > *cfg.MaxVoteSum {
 		return nil, invalidConfig("Value of min_vote_sum has to be lower then max_vote_sum")
 	}
+	if cfg.AllowAbstain == nil {
+		t := true
+		cfg.AllowAbstain = &t
+	}
 	if cfg.OneHundredPercentBase == nil {
 		return nil, invalidConfig("Field onehundred_percent_base is required")
 	}
@@ -113,6 +121,9 @@ func ratingScoreConfigForUpdate(config json.RawMessage, state dstypes.Poll_State
 	}
 
 	if state != dstypes.Poll_StateCreated {
+		if cfg.AllowAbstain != nil {
+			return nil, invalidConfig("Field allow_abstain is not allowed to update in poll state %s", state)
+		}
 		if cfg.MaxOptionsAmount != nil {
 			return nil, invalidConfig("Field max_options_amount is not allowed to update in poll state %s", state)
 		}
@@ -168,8 +179,8 @@ func ratingScoreConfigCreate(ctx context.Context, tx pgx.Tx, optionAmount int, c
 
 	var configID int
 	sql := `INSERT INTO poll_config_rating_score
-	(max_options_amount, min_options_amount, max_votes_per_option, max_vote_sum, min_vote_sum, onehundred_percent_base, required_majority)
-	VALUES ($1, $2, $3, $4, $5, $6, $7)
+	(max_options_amount, min_options_amount, max_votes_per_option, max_vote_sum, min_vote_sum, allow_abstain, onehundred_percent_base, required_majority)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	RETURNING id;`
 	if err := tx.QueryRow(
 		ctx,
@@ -179,6 +190,7 @@ func ratingScoreConfigCreate(ctx context.Context, tx pgx.Tx, optionAmount int, c
 		cfg.MaxVotesPerOption,
 		cfg.MaxVoteSum,
 		cfg.MinVoteSum,
+		cfg.AllowAbstain,
 		cfg.OneHundredPercentBase,
 		cfg.RequiredMajority,
 	).Scan(&configID); err != nil {
@@ -203,11 +215,24 @@ func ratingScoreConfigUpdate(ctx context.Context, ds flow.Getter, tx pgx.Tx, id 
 		max_votes_per_option = COALESCE($4, max_votes_per_option),
 		max_vote_sum = COALESCE($5, max_vote_sum),
 		min_vote_sum = COALESCE($6, min_vote_sum),
-		onehundred_percent_base = COALESCE($7, onehundred_percent_base),
-		required_majority = COALESCE($8, required_majority)
+		allow_abstain = COALESCE($7, allow_abstain),
+		onehundred_percent_base = COALESCE($8, onehundred_percent_base),
+		required_majority = COALESCE($9, required_majority)
 	WHERE id = $1;`
 
-	res, err := tx.Exec(ctx, sql, id, cfg.MaxOptionsAmount, cfg.MinOptionsAmount, cfg.MaxVotesPerOption, cfg.MaxVoteSum, cfg.MinVoteSum, cfg.OneHundredPercentBase, cfg.RequiredMajority)
+	res, err := tx.Exec(
+		ctx,
+		sql,
+		id,
+		cfg.MaxOptionsAmount,
+		cfg.MinOptionsAmount,
+		cfg.MaxVotesPerOption,
+		cfg.MaxVoteSum,
+		cfg.MinVoteSum,
+		cfg.AllowAbstain,
+		cfg.OneHundredPercentBase,
+		cfg.RequiredMajority,
+	)
 	if err != nil {
 		return fmt.Errorf("update approval config: %w", err)
 	}
@@ -256,7 +281,9 @@ func (rs RatingScore) ValidateBallot(vote json.RawMessage) error {
 	}
 
 	if value, set := rs.MinVoteSum.Value(); set && sum < value {
-		return invalidVote("too few votes")
+		if !(rs.AllowAbstain && len(choice) == 0) {
+			return invalidVote("too few votes")
+		}
 	}
 
 	return nil

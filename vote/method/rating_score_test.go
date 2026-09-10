@@ -138,6 +138,22 @@ func TestRatingScoreValidateVote(t *testing.T) {
 			vote:        `{"1":5, "2":5}`,
 			expectValid: true,
 		},
+		{
+			name:        "min_votes_sum but allow_abstain",
+			method:      "rating_score",
+			config:      `{"min_vote_sum":2,"allow_abstain":true}`,
+			options:     []int{1, 2},
+			vote:        `{}`,
+			expectValid: true,
+		},
+		{
+			name:        "min_votes_sum but not allow_abstain",
+			method:      "rating_score",
+			config:      `{"min_vote_sum":2,"allow_abstain":false}`,
+			options:     []int{1, 2},
+			vote:        `{}`,
+			expectValid: false,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			a, err := method.RatingScoreFromJson(tt.config)

@@ -151,7 +151,16 @@ func ratingApprovalConfigCreate(ctx context.Context, tx pgx.Tx, optionAmount int
 	(max_options_amount, min_options_amount, max_yes_amount, allow_abstain, onehundred_percent_base, required_majority)
 	VALUES ($1, $2, $3, $4, $5, $6)
 	RETURNING id;`
-	if err := tx.QueryRow(ctx, sql, cfg.MaxOptionsAmount, cfg.MinOptionsAmount, cfg.MaxYesAmount, cfg.AllowAbstain, cfg.OneHundredPercentBase, cfg.RequiredMajority).Scan(&configID); err != nil {
+	if err := tx.QueryRow(
+		ctx,
+		sql,
+		cfg.MaxOptionsAmount,
+		cfg.MinOptionsAmount,
+		cfg.MaxYesAmount,
+		cfg.AllowAbstain,
+		cfg.OneHundredPercentBase,
+		cfg.RequiredMajority,
+	).Scan(&configID); err != nil {
 		return "", fmt.Errorf("save ratingApproval config: %w", err)
 	}
 

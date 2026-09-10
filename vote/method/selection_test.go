@@ -83,6 +83,22 @@ func TestSelectionValidateVote(t *testing.T) {
 			expectValid: false,
 		},
 		{
+			name:        "min_options_amount too few but allow_abstain",
+			method:      "selection",
+			config:      `{"min_options_amount":2,"allow_abstain":true}`,
+			options:     []int{1, 2},
+			vote:        `[]`,
+			expectValid: true,
+		},
+		{
+			name:        "min_options_amount too few but not allow_abstain",
+			method:      "selection",
+			config:      `{"min_options_amount":2,"allow_abstain":false}`,
+			options:     []int{1, 2},
+			vote:        `[]`,
+			expectValid: false,
+		},
+		{
 			name:        "Selection nota",
 			method:      "selection",
 			config:      `{"min_options_amount":2,"allow_nota":true}`,

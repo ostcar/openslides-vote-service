@@ -23,11 +23,13 @@ type Selection struct {
 	MaxOptionsAmount dsfetch.Maybe[int] `json:"max_options_amount"`
 	MinOptionsAmount dsfetch.Maybe[int] `json:"min_options_amount"`
 	AllowNota        bool               `json:"allow_nota"`
+	AllowAbstain     bool               `json:"allow_abstain"`
 }
 
 // SelectionFromJson parses the given JSON config into a Selection struct.
 func SelectionFromJson(config string) (*Selection, error) {
 	var cfg Selection
+	cfg.AllowAbstain = true
 	if err := json.Unmarshal([]byte(config), &cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
@@ -51,6 +53,7 @@ func SelectionFromDsModels(configDB dsmodels.PollConfigSelection, optionIDs []in
 		MaxOptionsAmount: maybeZeroIsNull(configDB.MaxOptionsAmount),
 		MinOptionsAmount: maybeZeroIsNull(configDB.MinOptionsAmount),
 		AllowNota:        configDB.AllowNota,
+		AllowAbstain:     configDB.AllowAbstain,
 	}
 }
 
@@ -60,6 +63,7 @@ type selectionConfig struct {
 	StrikeOut             *bool   `json:"strike_out"`
 	MaxOptionsAmount      *int    `json:"max_options_amount"`
 	MinOptionsAmount      *int    `json:"min_options_amount"`
+	AllowAbstain          *bool   `json:"allow_abstain"`
 	OneHundredPercentBase *string `json:"onehundred_percent_base"`
 	RequiredMajority      *string `json:"required_majority"`
 }
@@ -91,6 +95,10 @@ func selectionConfigForCreate(config json.RawMessage, optionAmount int) (*select
 	if *cfg.MinOptionsAmount > *cfg.MaxOptionsAmount {
 		return nil, invalidConfig("Value of min_options_amount has to be lower then max_options_amount")
 	}
+	if cfg.AllowAbstain == nil {
+		t := true
+		cfg.AllowAbstain = &t
+	}
 	if cfg.OneHundredPercentBase == nil {
 		return nil, invalidConfig("Field onehundred_percent_base is required")
 	}
@@ -111,6 +119,9 @@ func selectionConfigForUpdate(config json.RawMessage, state dstypes.Poll_State, 
 	if state != dstypes.Poll_StateCreated {
 		if cfg.AllowNota != nil {
 			return nil, invalidConfig("Field allow_nota is not allowed to update in poll state %s", state)
+		}
+		if cfg.AllowAbstain != nil {
+			return nil, invalidConfig("Field allow_abstain is not allowed to update in poll state %s", state)
 		}
 		if cfg.MaxOptionsAmount != nil {
 			return nil, invalidConfig("Field max_options_amount is not allowed to update in poll state %s", state)
@@ -146,8 +157,8 @@ func selectionConfigCreate(ctx context.Context, tx pgx.Tx, optionAmount int, con
 
 	var configID int
 	sql := `INSERT INTO poll_config_selection
-	(allow_nota, display_chart, strike_out, max_options_amount, min_options_amount, onehundred_percent_base, required_majority)
-	VALUES ($1, $2, $3, $4, $5, $6, $7)
+	(allow_nota, display_chart, strike_out, max_options_amount, min_options_amount, allow_abstain, onehundred_percent_base, required_majority)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	RETURNING id;`
 	if err := tx.QueryRow(
 		ctx,
@@ -157,6 +168,7 @@ func selectionConfigCreate(ctx context.Context, tx pgx.Tx, optionAmount int, con
 		cfg.StrikeOut,
 		cfg.MaxOptionsAmount,
 		cfg.MinOptionsAmount,
+		cfg.AllowAbstain,
 		cfg.OneHundredPercentBase,
 		cfg.RequiredMajority,
 	).Scan(&configID); err != nil {
@@ -177,15 +189,28 @@ func selectionConfigUpdate(ctx context.Context, ds flow.Getter, tx pgx.Tx, id in
 	UPDATE poll_config_selection
 	SET
 		allow_nota = COALESCE($2, allow_nota),
-		display_chart = COALESCE($3, display_chart),
-		strike_out = COALESCE($4, strike_out),
-		max_options_amount = COALESCE($5, max_options_amount),
-		min_options_amount = COALESCE($6, min_options_amount),
-		onehundred_percent_base = COALESCE($7, onehundred_percent_base),
-		required_majority = COALESCE($8, required_majority)
+		allow_abstain = COALESCE($3, allow_abstain),
+		display_chart = COALESCE($4, display_chart),
+		strike_out = COALESCE($5, strike_out),
+		max_options_amount = COALESCE($6, max_options_amount),
+		min_options_amount = COALESCE($7, min_options_amount),
+		onehundred_percent_base = COALESCE($8, onehundred_percent_base),
+		required_majority = COALESCE($9, required_majority)
 	WHERE id = $1;`
 
-	res, err := tx.Exec(ctx, sql, id, cfg.AllowNota, cfg.DisplayChart, cfg.StrikeOut, cfg.MaxOptionsAmount, cfg.MinOptionsAmount, cfg.OneHundredPercentBase, cfg.RequiredMajority)
+	res, err := tx.Exec(
+		ctx,
+		sql,
+		id,
+		cfg.AllowNota,
+		cfg.AllowAbstain,
+		cfg.DisplayChart,
+		cfg.StrikeOut,
+		cfg.MaxOptionsAmount,
+		cfg.MinOptionsAmount,
+		cfg.OneHundredPercentBase,
+		cfg.RequiredMajority,
+	)
 	if err != nil {
 		return fmt.Errorf("update approval config: %w", err)
 	}
@@ -215,8 +240,12 @@ func (s Selection) ValidateBallot(vote json.RawMessage) error {
 	}
 
 	if value, set := s.MinOptionsAmount.Value(); set && len(choice) < value {
-		return invalidVote("too few options")
+		if !(s.AllowAbstain && len(choice) == 0) {
+			return invalidVote("too few options")
+		}
+
 	}
+
 	for _, option := range choice {
 		if !slices.Contains(s.Options, option) {
 			return invalidVote("unknown option id %d", option)
