@@ -26,8 +26,8 @@ type Selection struct {
 	AllowAbstain     bool               `json:"allow_abstain"`
 }
 
-// SelectionFromJson parses the given JSON config into a Selection struct.
-func SelectionFromJson(config string) (*Selection, error) {
+// SelectionFromJSON parses the given JSON config into a Selection struct.
+func SelectionFromJSON(config string) (*Selection, error) {
 	var cfg Selection
 	cfg.AllowAbstain = true
 	if err := json.Unmarshal([]byte(config), &cfg); err != nil {

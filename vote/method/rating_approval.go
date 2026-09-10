@@ -25,8 +25,8 @@ type RatingApproval struct {
 	AllowAbstain     bool               `json:"allow_abstain"`
 }
 
-// RatingApprovalFromJson parses the given JSON config into a RatingApproval struct.
-func RatingApprovalFromJson(config string) (*RatingApproval, error) {
+// RatingApprovalFromJSON parses the given JSON config into a RatingApproval struct.
+func RatingApprovalFromJSON(config string) (*RatingApproval, error) {
 	var cfg RatingApproval
 	cfg.AllowAbstain = true
 	if err := json.Unmarshal([]byte(config), &cfg); err != nil {

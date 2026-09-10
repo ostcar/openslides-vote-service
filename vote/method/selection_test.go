@@ -103,7 +103,7 @@ func TestSelectionValidateVote(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := method.SelectionFromJson(tt.config)
+			a, err := method.SelectionFromJSON(tt.config)
 			if err != nil {
 				t.Fatalf("Error: %v", err)
 			}
@@ -178,7 +178,7 @@ func TestSelectionCreateResult(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := method.SelectionFromJson(tt.config)
+			a, err := method.SelectionFromJSON(tt.config)
 			if err != nil {
 				t.Fatalf("Error: %v", err)
 			}

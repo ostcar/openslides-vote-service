@@ -17,8 +17,8 @@ type Approval struct {
 	AllowAbstain bool `json:"allow_abstain"`
 }
 
-// ApprovalFromJson parses the given JSON config into an Approval struct.
-func ApprovalFromJson(config string) (*Approval, error) {
+// ApprovalFromJSON parses the given JSON config into an Approval struct.
+func ApprovalFromJSON(config string) (*Approval, error) {
 	var cfg Approval
 	cfg.AllowAbstain = true
 	if config == "" {

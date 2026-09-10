@@ -46,7 +46,7 @@ func TestApprovalValidateVote(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := method.ApprovalFromJson(tt.config)
+			a, err := method.ApprovalFromJSON(tt.config)
 			if err != nil {
 				t.Fatalf("Error: %v", err)
 			}
@@ -106,7 +106,7 @@ func TestApprovalCreateResult(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := method.ApprovalFromJson(tt.config)
+			a, err := method.ApprovalFromJSON(tt.config)
 			if err != nil {
 				t.Fatalf("Error: %v", err)
 			}
