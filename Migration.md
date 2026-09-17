@@ -543,21 +543,21 @@ It's a dictionary where each key-value pair represents an old `vote`:
   * meeting/*_poll_sort_poll_result_by_votes -> meeting_poll_default/sort_result_by_votes
 * Field should be renamed and moved to meeting_poll_default, values should be changed similarly to poll/type:
   * meeting/*_poll_default_type -> meeting_poll_default/visibility
-* Field should be moved to meeting_poll_default and values should be changed similarly to poll/onehundred_percent_base:
+* Field should be moved to meeting_poll_default and values should be changed similarly to poll/onehundred_percent_base
+  (only the onehundred_percent_base field but not strike_out):
   * meeting/*_poll_default_onehundred_percent_base -> meeting_poll_default/onehundred_percent_base
 * For topic polls:
   * meeting_poll_default/display_chart: pie
-* meeting/assignment_poll_default_method
-  * Y
-    * meeting_poll_default/method -> selection
-  * N
-    * meeting_poll_default/method -> selection
-    * meeting_poll_default/strike_out -> true
-  * YN
-    * meeting_poll_default/method -> rating_approval
-  * YNA
-    * meeting_poll_default/method -> rating_approval
-    * meeting_poll_default/allow_abstain -> true
+* Values should be changed and/or used for creating meeting_poll_default:
+  * meeting/assignment_poll_default_method:
+    * Y -> selection
+    * N -> selection (+ meeting_poll_default/strike_out -> true)
+    * YN -> rating_approval
+    * YNA -> rating_approval (+ meeting_poll_default/allow_abstain -> true)
+  * meeting/motion_poll_default_method:
+    * YNA: meeting_poll_default/allow_abstain -> true
+  * meeting/poll_default_method:
+    * N: meeting_poll_default/strike_out -> true
 
 ### Meeting_user
 
