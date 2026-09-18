@@ -737,7 +737,7 @@ func (v *Vote) pollStop(ctx context.Context, tx pgx.Tx, poll dsmodels.Poll) erro
 		return fmt.Errorf("resolve poll method: %w", err)
 	}
 
-	result, err := CreateResult(pm, poll.AllowVoteSplit, ballots)
+	result, err := CreateResult(pm, poll.AllowVoteSplit, poll.AllowEmpty, ballots)
 	if err != nil {
 		return fmt.Errorf("create poll result: %w", err)
 	}
@@ -890,8 +890,8 @@ func generateEntitledUsers(ctx context.Context, tx pgx.Tx, pollID int) error {
 	}
 
 	baseInsertSQL := `
-		INSERT INTO poll_entitled_user_t (meeting_user_id, poll_id)
-		SELECT meeting_user_id, $1 FROM (
+		INSERT INTO poll_entitled_user_t (meeting_user_id, poll_id, present)
+		SELECT meeting_user_id, $1, true FROM (
 			SELECT represented_meeting_user_id AS meeting_user_id
 			FROM poll_ballot_user_t
 			WHERE poll_id = $1
@@ -1088,6 +1088,9 @@ func (v *Vote) Vote(ctx context.Context, pollID, requestUserID int, r io.Reader)
 		}
 
 		for _, value := range splitted {
+			if poll.AllowEmpty && method.BallotIsEmpty(value) {
+				continue
+			}
 			if err := pm.ValidateBallot(value); err != nil {
 				return fmt.Errorf("validate ballot: %w", err)
 			}
@@ -1305,12 +1308,12 @@ func CalcVoteWeight(ctx context.Context, fetch *dsfetch.Fetch, meetingUserID int
 }
 
 // CreateResult creates the result from a list of votes.
-func CreateResult(method method.Method, allowVoteSplit bool, ballots []method.Ballot) (string, error) {
+func CreateResult(method method.Method, allowVoteSplit bool, allowEmpty bool, ballots []method.Ballot) (string, error) {
 	if allowVoteSplit {
 		ballots = splitVote(method, ballots)
 	}
 
-	return method.Result(ballots)
+	return method.Result(ballots, allowEmpty)
 }
 
 func splitVote(m method.Method, ballots []method.Ballot) []method.Ballot {

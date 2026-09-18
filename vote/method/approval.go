@@ -149,8 +149,8 @@ func (a *Approval) ValidateBallot(ballot json.RawMessage) error {
 }
 
 // Result calculates the result.
-func (a *Approval) Result(ballots []Ballot) (string, error) {
-	return iterateValues(a, ballots, func(value string, weight decimal.Decimal, result map[string]decimal.Decimal) error {
+func (a *Approval) Result(ballots []Ballot, allowEmpty bool) (string, error) {
+	return iterateValues(a, ballots, allowEmpty, func(value string, weight decimal.Decimal, result map[string]decimal.Decimal) error {
 		switch strings.ToLower(value) {
 		case `"yes"`:
 			result["yes"] = result["yes"].Add(weight)

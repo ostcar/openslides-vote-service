@@ -76,25 +76,24 @@ func TestApprovalValidateVote(t *testing.T) {
 func TestApprovalCreateResult(t *testing.T) {
 	for _, tt := range []struct {
 		name         string
-		method       string
 		config       string
 		ballots      []method.Ballot
+		allowEmpty   bool
 		expectResult string
 	}{
 		{
 			name:   "Approval",
-			method: "approval",
 			config: "",
 			ballots: []method.Ballot{
 				{Value: `"Yes"`},
 				{Value: `"Yes"`},
 				{Value: `"No"`},
 			},
+			allowEmpty:   false,
 			expectResult: `{"no":"1","total_ballots":3,"yes":"2"}`,
 		},
 		{
-			name:   "Approval with invalid",
-			method: "approval",
+			name:   "Invalid",
 			config: "",
 			ballots: []method.Ballot{
 				{Value: `"Yes"`},
@@ -102,7 +101,36 @@ func TestApprovalCreateResult(t *testing.T) {
 				{Value: `"No"`},
 				{Value: `"ABC"`},
 			},
+			allowEmpty:   false,
 			expectResult: `{"invalid":1,"no":"1","total_ballots":4,"yes":"2"}`,
+		},
+		{
+			name:   "AllowEmpty",
+			config: "",
+			ballots: []method.Ballot{
+				{Value: `"Yes"`},
+				{Value: `"Yes"`},
+				{Value: `"No"`},
+				{Value: `"ABC"`},
+				{Value: ``},
+				{Value: `null`},
+			},
+			allowEmpty:   true,
+			expectResult: `{"empty":"2","invalid":1,"no":"1","total_ballots":6,"yes":"2"}`,
+		},
+		{
+			name:   "Empty not allowed",
+			config: "",
+			ballots: []method.Ballot{
+				{Value: `"Yes"`},
+				{Value: `"Yes"`},
+				{Value: `"No"`},
+				{Value: `"ABC"`},
+				{Value: ``},
+				{Value: `null`},
+			},
+			allowEmpty:   false,
+			expectResult: `{"invalid":3,"no":"1","total_ballots":6,"yes":"2"}`,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -111,7 +139,7 @@ func TestApprovalCreateResult(t *testing.T) {
 				t.Fatalf("Error: %v", err)
 			}
 
-			result, err := a.Result(tt.ballots)
+			result, err := a.Result(tt.ballots, tt.allowEmpty)
 			if err != nil {
 				t.Fatalf("CreateResult: %v", err)
 			}

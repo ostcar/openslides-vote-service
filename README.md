@@ -253,14 +253,15 @@ Valid ballots look like: `{"value":"yes"}`, `{"value":"no"}` or
 
 The poll result looks like:
 
-`{"yes":"32","no":"20","abstain":"10","invalid":2,"total_ballots":64}`
+`{"yes":"32","no":"20","abstain":"10","invalid":2,"empty":"3","total_ballots":64}`
 
 Attributes with a zero get discarded.
 
 The values are decimal values decoded as string. See [Vote
-Weight](#vote-weight). Only the values of `invalid` and `total_ballots` are integers,
-since they are absolut numbers and not affected by bote weight. The field
-`total_ballots` is the number of ballots. It contains valid and invalid ballots.
+Weight](#vote-weight). Only the values of `invalid` and `total_ballots` are
+integers, since they are absolut numbers and not affected by bote weight. The
+field `total_ballots` is the number of ballots. It contains valid and invalid
+ballots. The field `empty` counts empty ballots.
 
 
 ### selection
@@ -294,7 +295,8 @@ negatively and the result is presented accordingly.
 
 A ballot is a list of option ids. For example: `{"value":[1]}`.
 
-To abstain from a poll, an empty list can be delivered: `{"value":[]}`
+If `poll/allow_empty` is set, it is allowed to send no values: `{"value":null}`
+or `{}`.
 
 If `allow_nota` is set, then a user can vote with
 [nota](https://en.wikipedia.org/wiki/None_of_the_above): `{"value":"nota"}`. This
@@ -304,13 +306,13 @@ means, that they disapprove all options.
 #### poll/result
 
 A result can look like this:
-`{"1":"40","2":"23","nota":"6","abstain":"7","invalid":3,"total_ballots":80}`
+`{"1":"40","2":"23","nota":"6","empty":"7","invalid":3,"total_ballots":80}`
 
 The keys of the json-object are option_ids as string.
 
 This means, that users with a combined vote-weight of 40 have voted for the
 option 1, 23 for the option 2, 6 with the string `nota`, 7 with
-an empty list and 3 with an invalid vote.
+no values and 3 with an invalid vote.
 
 
 ### rating_score
@@ -352,13 +354,14 @@ result, but only to present the relative result in percent.
 A ballot is an object/dictionary from the `option_id` as string to the numeric
 score. For example: `{"value":{"1":3, "2":1}}`.
 
-An empty object means abstain: `{"value":{}}`
+If `poll/allow_empty` is set, it is allowed to send no values: `{"value":null}`
+or `{}`.
 
 
 #### poll/result
 
 A result can looks simular to a `selection`-result:
-`{"1":"40","2":"23",abstain":"7","invalid":3,"total_ballots":60}`
+`{"1":"40","2":"23","empty":"7","invalid":3,"total_ballots":60}`
 
 
 ### rating_approval
@@ -384,15 +387,19 @@ result, but only to present the relative result in percent.
 A ballot value looks like a combination between `rating_score` and `approval`:
 `{"value":{"1":"yes","2":"abstain"}}`.
 
+If `poll/allow_empty` is set, it is allowed to send no values: `{"value":null}`
+or `{}`.
+
 
 #### poll/result
 
 A `rating_approval` result looks like:
-`{"1":{"yes":"5","no":"1"},"2":{"yes":"1","abstain":"6"},"invalid":1,"total_ballots":7}`
+`{"1":{"yes":"5","no":"1"},"2":{"yes":"1","abstain":"6"},"empty":"7","invalid":1,"total_ballots":7}`
 
 This means, that for the option with id `1`, there where 5 ballots with `Yes`,
-one ballot with `No` and no `abstain`. For the option with id `2`, there where
-one `Yes`, 6 `Abstain` and no `No`. There was one invalid ballot.
+one ballot with `No` and no `Abstain`. For the option with id `2`, there where
+one `Yes`, 6 `Abstain` and no `No`. There where 7 empty ballots and one invalid
+ballot.
 
 A ballot is invalid if one of its values is invalid. For example a ballot like
 `{"value":{"1":"yes","2":"INVALID-VALUE"}}` is counted as invalid for both
@@ -472,6 +479,8 @@ example:
 
 The value is an integer and not a decimal value decoded as string. It counts the
 amount of invalid ballots and not the vote-weight.
+
+If `poll/allow_empty` is set to false, an empty ballot is counted as invalid.
 
 
 ## Live Voting

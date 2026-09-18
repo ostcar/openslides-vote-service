@@ -228,13 +228,27 @@ func (ra RatingApproval) ValidateBallot(vote json.RawMessage) error {
 }
 
 // Result calculates the result.
-func (ra RatingApproval) Result(votes []Ballot) (string, error) {
+func (ra RatingApproval) Result(ballots []Ballot, allowEmpty bool) (string, error) {
 	result := make(map[string]map[string]decimal.Decimal)
 	invalid := 0
-	var abstain decimal.Decimal
+	var empty decimal.Decimal
 
-	for _, vote := range votes {
-		if err := ra.ValidateBallot(json.RawMessage(vote.Value)); err != nil {
+	for _, ballot := range ballots {
+		weight := ballot.Weight
+		if ballot.Weight.IsZero() {
+			weight = decimal.NewFromInt(1)
+		}
+
+		if BallotIsEmpty([]byte(ballot.Value)) {
+			if allowEmpty {
+				empty = empty.Add(weight)
+			} else {
+				invalid++
+			}
+			continue
+		}
+
+		if err := ra.ValidateBallot(json.RawMessage(ballot.Value)); err != nil {
 			if _, ok := errors.AsType[InvalidBallotError](err); ok {
 				invalid++
 				continue
@@ -242,19 +256,9 @@ func (ra RatingApproval) Result(votes []Ballot) (string, error) {
 			return "", fmt.Errorf("validating vote: %w", err)
 		}
 
-		weight := vote.Weight
-		if vote.Weight.IsZero() {
-			weight = decimal.NewFromInt(1)
-		}
-
 		var votedOptions map[string]json.RawMessage
-		if err := json.Unmarshal([]byte(vote.Value), &votedOptions); err != nil {
-			return "", fmt.Errorf("invalid options `%s`: %w", vote.Value, err)
-		}
-
-		if len(votedOptions) == 0 {
-			abstain = abstain.Add(weight)
-			continue
+		if err := json.Unmarshal([]byte(ballot.Value), &votedOptions); err != nil {
+			return "", fmt.Errorf("invalid options `%s`: %w", ballot.Value, err)
 		}
 
 		for option, value := range votedOptions {
@@ -277,28 +281,9 @@ func (ra RatingApproval) Result(votes []Ballot) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("encode result: %w", err)
 	}
-	withInvalid, err := addExtra(encodedResult, len(votes), invalid, abstain)
+	withInvalid, err := addFieldsToResult(encodedResult, len(ballots), invalid, empty)
 	if err != nil {
 		return "", fmt.Errorf("add invalid and abstain: %w", err)
 	}
 	return string(withInvalid), nil
-}
-
-func addExtra(result []byte, totalBallots, invalid int, abstain decimal.Decimal) ([]byte, error) {
-	var data map[string]any
-	if err := json.Unmarshal(result, &data); err != nil {
-		return nil, err
-	}
-
-	if invalid != 0 {
-		data[keyInvalid] = invalid
-	}
-
-	if !abstain.IsZero() {
-		data[keyAbstain] = abstain
-	}
-
-	data[keyTotalBallots] = totalBallots
-
-	return json.Marshal(data)
 }
