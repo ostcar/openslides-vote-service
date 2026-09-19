@@ -1,6 +1,7 @@
 package vote_test
 
 import (
+	"cmp"
 	"errors"
 	"os"
 	"reflect"
@@ -1306,7 +1307,6 @@ func TestSaveEntitledUsers(t *testing.T) {
 		content_object_id: motion/52
 		state: started
 
-
 	# Poll 3: delegation and self voting activated (Meeting 3)
 	poll/3:
 		title: self voting allowed
@@ -1375,6 +1375,11 @@ func TestSaveEntitledUsers(t *testing.T) {
 			meeting_id: 3
 	`
 
+	type entitledUserResult struct {
+		id      int
+		present bool
+	}
+
 	withData(
 		t,
 		pg,
@@ -1392,15 +1397,22 @@ func TestSaveEntitledUsers(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Fetch entitled_meeting_user_ids: %v", err)
 				}
-				var got []int
+				var got []entitledUserResult
 				for _, entitledUser := range poll.EntitledUserList {
 					if id, ok := entitledUser.MeetingUserID.Value(); ok {
-						got = append(got, id)
+						present := entitledUser.Present
+						got = append(got, entitledUserResult{id: id, present: present})
 					}
 				}
-				slices.Sort(got)
+				slices.SortFunc(got, func(a, b entitledUserResult) int {
+					return cmp.Compare(a.id, b.id)
+				})
 
-				want := []int{11, 21}
+				want := []entitledUserResult{
+					{id: 11, present: true},  // Present + Voted
+					{id: 21, present: true},  // Present
+					{id: 31, present: false}, // Not present + Not voted
+				}
 				if !reflect.DeepEqual(got, want) {
 					t.Errorf("got %v, want %v", got, want)
 				}
@@ -1418,15 +1430,21 @@ func TestSaveEntitledUsers(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Fetch entitled_meeting_user_ids: %v", err)
 				}
-				var got []int
+				var got []entitledUserResult
 				for _, entitledUser := range poll.EntitledUserList {
 					if id, ok := entitledUser.MeetingUserID.Value(); ok {
-						got = append(got, id)
+						present := entitledUser.Present
+						got = append(got, entitledUserResult{id: id, present: present})
 					}
 				}
-				slices.Sort(got)
+				slices.SortFunc(got, func(a, b entitledUserResult) int {
+					return cmp.Compare(a.id, b.id)
+				})
 
-				want := []int{12, 32}
+				want := []entitledUserResult{
+					{id: 12, present: true},  // Present + Voted
+					{id: 32, present: false}, // Not present + Not voted
+				}
 				if !reflect.DeepEqual(got, want) {
 					t.Errorf("got %v, want %v", got, want)
 				}
@@ -1444,15 +1462,22 @@ func TestSaveEntitledUsers(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Fetch entitled_meeting_user_ids: %v", err)
 				}
-				var got []int
+				var got []entitledUserResult
 				for _, entitledUser := range poll.EntitledUserList {
 					if id, ok := entitledUser.MeetingUserID.Value(); ok {
-						got = append(got, id)
+						present := entitledUser.Present
+						got = append(got, entitledUserResult{id: id, present: present})
 					}
 				}
-				slices.Sort(got)
+				slices.SortFunc(got, func(a, b entitledUserResult) int {
+					return cmp.Compare(a.id, b.id)
+				})
 
-				want := []int{13, 23, 33}
+				want := []entitledUserResult{
+					{id: 13, present: true},  // Present + Voted
+					{id: 23, present: true},  // Present
+					{id: 33, present: false}, // Not present + Not voted
+				}
 				if !reflect.DeepEqual(got, want) {
 					t.Errorf("got %v, want %v", got, want)
 				}

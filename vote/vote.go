@@ -869,8 +869,8 @@ func rewriteBallotsPostgres(ctx context.Context, tx pgx.Tx, pollID int) error {
 
 // generateEntitledUsers fills in the field poll/entitled_meeting_user_ids
 //
-// It uses a set from all represented users, that have voted and all users in
-// one of the entitled_group, that are currently allowed to vote.
+// It uses a set from all represented users that have voted and all users in
+// one of the entitled_groups, setting the present flag accordingly.
 func generateEntitledUsers(ctx context.Context, tx pgx.Tx, pollID int) error {
 	var meetingConfig struct {
 		delegationActivated  bool
@@ -880,7 +880,7 @@ func generateEntitledUsers(ctx context.Context, tx pgx.Tx, pollID int) error {
 	configSQL := `
 		SELECT
 			COALESCE(m.users_enable_vote_delegations, false),
-	        COALESCE(m.users_forbid_delegator_to_vote, false)
+			COALESCE(m.users_forbid_delegator_to_vote, false)
 		FROM meeting_t m
 		JOIN poll_t p ON p.meeting_id = m.id
 		WHERE p.id = $1`
@@ -888,16 +888,6 @@ func generateEntitledUsers(ctx context.Context, tx pgx.Tx, pollID int) error {
 	if err := tx.QueryRow(ctx, configSQL, pollID).Scan(&meetingConfig.delegationActivated, &meetingConfig.forbidDelegateToVote); err != nil {
 		return fmt.Errorf("getting meeting config: %w", err)
 	}
-
-	baseInsertSQL := `
-		INSERT INTO poll_entitled_user_t (meeting_user_id, poll_id)
-		SELECT meeting_user_id, $1 FROM (
-			SELECT represented_meeting_user_id AS meeting_user_id
-			FROM poll_ballot_user_t
-			WHERE poll_id = $1
-
-			UNION
-	`
 
 	var conditionSQL string
 	switch {
@@ -908,7 +898,6 @@ func generateEntitledUsers(ctx context.Context, tx pgx.Tx, pollID int) error {
 			FROM meeting_user_t mu
 			JOIN nm_group_meeting_user_ids_meeting_user_t gmu ON gmu.meeting_user_id = mu.id
 			JOIN nm_group_poll_ids_poll_t gpol ON gpol.group_id = gmu.group_id
-			JOIN nm_meeting_present_user_ids_user_t pu ON pu.meeting_id = mu.meeting_id AND pu.user_id = mu.user_id
 			WHERE gpol.poll_id = $1
 		`
 
@@ -920,8 +909,6 @@ func generateEntitledUsers(ctx context.Context, tx pgx.Tx, pollID int) error {
 			JOIN nm_group_meeting_user_ids_meeting_user_t gmu ON gmu.meeting_user_id = mu.id
 			JOIN nm_group_poll_ids_poll_t gpol ON gpol.group_id = gmu.group_id
 			JOIN nm_meeting_user_vote_delegated_to_ids_meeting_user_t del ON del.vote_delegations_from_id = mu.id
-			JOIN meeting_user_t delegate_mu ON delegate_mu.id = del.vote_delegated_to_id
-			JOIN nm_meeting_present_user_ids_user_t pu ON pu.meeting_id = delegate_mu.meeting_id AND pu.user_id = delegate_mu.user_id
 			WHERE gpol.poll_id = $1
 		`
 
@@ -933,29 +920,42 @@ func generateEntitledUsers(ctx context.Context, tx pgx.Tx, pollID int) error {
 			JOIN nm_group_meeting_user_ids_meeting_user_t gmu ON gmu.meeting_user_id = mu.id
 			JOIN nm_group_poll_ids_poll_t gpol ON gpol.group_id = gmu.group_id
 			WHERE gpol.poll_id = $1
-			  AND (
-			      EXISTS (
-			          SELECT 1 FROM nm_meeting_present_user_ids_user_t pu
-			          WHERE pu.meeting_id = mu.meeting_id AND pu.user_id = mu.user_id
-			      )
-			      OR
-			      EXISTS (
-			          SELECT 1
-			          FROM nm_meeting_user_vote_delegated_to_ids_meeting_user_t del
-			          JOIN meeting_user_t delegate_mu ON delegate_mu.id = del.vote_delegated_to_id
-			          JOIN nm_meeting_present_user_ids_user_t pu_del ON pu_del.meeting_id = delegate_mu.meeting_id AND pu_del.user_id = delegate_mu.user_id
-			          WHERE del.vote_delegations_from_id = mu.id
-			      )
-			  )
 		`
 	}
 
-	finalSQL := baseInsertSQL + conditionSQL + `
-		) AS entitled_users
-		ON CONFLICT DO NOTHING;
-	`
+	// Wraps the candidate users and determines 'present' status:
+	// True if the user is currently present OR has submitted a ballot for this poll.
+	insertSQL := `
+		WITH candidate_users AS (
+			SELECT represented_meeting_user_id AS meeting_user_id
+			FROM poll_ballot_user_t
+			WHERE poll_id = $1
 
-	if _, err := tx.Exec(ctx, finalSQL, pollID); err != nil {
+			UNION
+
+			` + conditionSQL + `
+		)
+		INSERT INTO poll_entitled_user_t (meeting_user_id, poll_id, present)
+		SELECT
+			cu.meeting_user_id,
+			$1,
+			(
+				EXISTS (
+					SELECT 1
+					FROM nm_meeting_present_user_ids_user_t pu
+					JOIN meeting_user_t mu ON mu.meeting_id = pu.meeting_id AND mu.user_id = pu.user_id
+					WHERE mu.id = cu.meeting_user_id
+				)
+				OR EXISTS (
+					SELECT 1
+					FROM poll_ballot_user_t pbu
+					WHERE pbu.poll_id = $1 AND pbu.represented_meeting_user_id = cu.meeting_user_id
+				)
+			) AS present
+		FROM candidate_users cu
+		ON CONFLICT DO NOTHING;`
+
+	if _, err := tx.Exec(ctx, insertSQL, pollID); err != nil {
 		return fmt.Errorf("inserting entitled users: %w", err)
 	}
 
