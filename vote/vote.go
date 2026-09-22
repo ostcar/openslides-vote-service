@@ -510,7 +510,7 @@ func (v *Vote) AllLiveVotes(ctx context.Context) map[int]map[int]*string {
 			// named vote. Remove the votes for all other votes.
 			for userID, vote := range userID2Vote {
 				if vote == nil {
-					out[pollID] = nil
+					out[pollID][userID] = nil
 					continue
 				}
 				str := string(vote)
