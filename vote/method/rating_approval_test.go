@@ -89,6 +89,7 @@ func TestRatingApprovalCreateResult(t *testing.T) {
 		config       string
 		options      []int
 		ballots      []method.Ballot
+		allowEmpty   bool
 		expectResult string
 	}{
 		{
@@ -100,6 +101,7 @@ func TestRatingApprovalCreateResult(t *testing.T) {
 				{Value: `{"2":"yes","3":"no"}`},
 				{Value: `{"3":"yes"}`, Weight: decimal.NewFromInt(5)},
 			},
+			allowEmpty:   false,
 			expectResult: `{"1":{"yes":"1"},"2":{"no":"1","yes":"1"},"3":{"no":"1","yes":"5"},"total_ballots":3}`,
 		},
 		{
@@ -110,29 +112,32 @@ func TestRatingApprovalCreateResult(t *testing.T) {
 				{Value: `{"1":"yes","2":"abstain"}`},
 				{Value: `{"1":"yes","2":"no"}`},
 			},
+			allowEmpty:   false,
 			expectResult: `{"1":{"yes":"1"},"2":{"no":"1"},"invalid":1,"total_ballots":2}`,
 		},
 		{
-			name:    "General abstain",
+			name:    "Empty allowed",
 			config:  `{}`,
 			options: []int{1, 2, 3},
 			ballots: []method.Ballot{
 				{Value: `{"1":"yes","2":"no"}`},
-				{Value: `{}`},
+				{Value: ``},
+				{Value: `null`},
 			},
-			expectResult: `{"1":{"yes":"1"},"2":{"no":"1"},"abstain":"1","total_ballots":2}`,
+			allowEmpty:   true,
+			expectResult: `{"1":{"yes":"1"},"2":{"no":"1"},"empty":"2","total_ballots":3}`,
 		},
 		{
-			name: "General abstain but abstain not allowed",
-			// At the moment, to abstain and not vote for a option, is something different.
-			config:  `{"allow_abstain":false}`,
+			name:    "Empty not allowed",
+			config:  `{}`,
 			options: []int{1, 2, 3},
 			ballots: []method.Ballot{
 				{Value: `{"1":"yes","2":"no"}`},
-				{Value: `{"1":"yes","2":"abstain"}`},
-				{Value: `{}`},
+				{Value: ``},
+				{Value: `null`},
 			},
-			expectResult: `{"1":{"yes":"1"},"2":{"no":"1"},"abstain":"1","invalid":1,"total_ballots":3}`,
+			allowEmpty:   false,
+			expectResult: `{"1":{"yes":"1"},"2":{"no":"1"},"invalid":2,"total_ballots":3}`,
 		},
 		{
 			name: "Not Voting does not count as abstain",
@@ -143,6 +148,7 @@ func TestRatingApprovalCreateResult(t *testing.T) {
 				{Value: `{"1":"yes","2":"abstain"}`},
 				{Value: `{"1":"yes"}`},
 			},
+			allowEmpty:   false,
 			expectResult: `{"1":{"yes":"2"},"2":{"abstain":"1"},"total_ballots":2}`,
 		},
 	} {
@@ -153,7 +159,7 @@ func TestRatingApprovalCreateResult(t *testing.T) {
 			}
 			a.Options = tt.options
 
-			result, err := a.Result(tt.ballots)
+			result, err := a.Result(tt.ballots, tt.allowEmpty)
 			if err != nil {
 				t.Fatalf("CreateResult: %v", err)
 			}

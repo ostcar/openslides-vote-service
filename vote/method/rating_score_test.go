@@ -171,15 +171,14 @@ func TestRatingScoreValidateVote(t *testing.T) {
 func TestRatingScoreCreateResult(t *testing.T) {
 	for _, tt := range []struct {
 		name         string
-		method       string
 		config       string
 		options      []int
 		ballots      []method.Ballot
+		allowEmpty   bool
 		expectResult string
 	}{
 		{
 			name:    "Rating Score",
-			method:  "rating_score",
 			config:  `{}`,
 			options: []int{1, 2, 3},
 			ballots: []method.Ballot{
@@ -187,19 +186,32 @@ func TestRatingScoreCreateResult(t *testing.T) {
 				{Value: `{"2":2,"3":3}`},
 				{Value: `{"3":5}`, Weight: decimal.NewFromInt(5)},
 			},
+			allowEmpty:   false,
 			expectResult: `{"1":"3","2":"5","3":"28","total_ballots":3}`,
 		},
 		{
-			name:    "Rating Score Abstain",
-			method:  "rating_score",
+			name:    "Empty allowed",
 			config:  `{}`,
 			options: []int{1, 2, 3},
 			ballots: []method.Ballot{
 				{Value: `{"1":3,"2":3}`},
-				{Value: `{}`},
-				{Value: `{}`, Weight: decimal.NewFromInt(5)},
+				{Value: ``},
+				{Value: `null`, Weight: decimal.NewFromInt(5)},
 			},
-			expectResult: `{"1":"3","2":"3","abstain":"6","total_ballots":3}`,
+			allowEmpty:   true,
+			expectResult: `{"1":"3","2":"3","empty":"6","total_ballots":3}`,
+		},
+		{
+			name:    "Empty not allowed",
+			config:  `{}`,
+			options: []int{1, 2, 3},
+			ballots: []method.Ballot{
+				{Value: `{"1":3,"2":3}`},
+				{Value: ``},
+				{Value: `null`, Weight: decimal.NewFromInt(5)},
+			},
+			allowEmpty:   false,
+			expectResult: `{"1":"3","2":"3","invalid":2,"total_ballots":3}`,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -209,7 +221,7 @@ func TestRatingScoreCreateResult(t *testing.T) {
 			}
 			a.Options = tt.options
 
-			result, err := a.Result(tt.ballots)
+			result, err := a.Result(tt.ballots, tt.allowEmpty)
 			if err != nil {
 				t.Fatalf("CreateResult: %v", err)
 			}

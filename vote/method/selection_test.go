@@ -123,15 +123,14 @@ func TestSelectionValidateVote(t *testing.T) {
 func TestSelectionCreateResult(t *testing.T) {
 	for _, tt := range []struct {
 		name         string
-		method       string
 		config       string
 		options      []int
 		ballots      []method.Ballot
+		allowEmpty   bool
 		expectResult string
 	}{
 		{
 			name:    "Selection",
-			method:  "selection",
 			config:  `{}`,
 			options: []int{1, 2, 3},
 			ballots: []method.Ballot{
@@ -139,23 +138,35 @@ func TestSelectionCreateResult(t *testing.T) {
 				{Value: `[2,3]`},
 				{Value: `[3]`, Weight: decimal.NewFromInt(5)},
 			},
+			allowEmpty:   false,
 			expectResult: `{"1":"1","2":"2","3":"6","total_ballots":3}`,
 		},
 		{
-			name:    "Selection abstain",
-			method:  "selection",
+			name:    "Abstain allowed",
 			config:  `{}`,
 			options: []int{1, 2, 3},
 			ballots: []method.Ballot{
 				{Value: `[1,2]`},
-				{Value: `[]`},
-				{Value: `[]`, Weight: decimal.NewFromInt(5)},
+				{Value: ``},
+				{Value: `null`, Weight: decimal.NewFromInt(5)},
 			},
-			expectResult: `{"1":"1","2":"1","abstain":"6","total_ballots":3}`,
+			allowEmpty:   true,
+			expectResult: `{"1":"1","2":"1","empty":"6","total_ballots":3}`,
+		},
+		{
+			name:    "Abstain not allowed",
+			config:  `{}`,
+			options: []int{1, 2, 3},
+			ballots: []method.Ballot{
+				{Value: `[1,2]`},
+				{Value: ``},
+				{Value: `null`, Weight: decimal.NewFromInt(5)},
+			},
+			allowEmpty:   false,
+			expectResult: `{"1":"1","2":"1","invalid":2,"total_ballots":3}`,
 		},
 		{
 			name:    "Selection nota",
-			method:  "selection",
 			config:  `{"allow_nota":true}`,
 			options: []int{1, 2, 3},
 			ballots: []method.Ballot{
@@ -163,6 +174,7 @@ func TestSelectionCreateResult(t *testing.T) {
 				{Value: `"nota"`},
 				{Value: `"nota"`, Weight: decimal.NewFromInt(5)},
 			},
+			allowEmpty:   false,
 			expectResult: `{"1":"1","2":"1","nota":"6","total_ballots":3}`,
 		},
 	} {
@@ -173,7 +185,7 @@ func TestSelectionCreateResult(t *testing.T) {
 			}
 			a.Options = tt.options
 
-			result, err := a.Result(tt.ballots)
+			result, err := a.Result(tt.ballots, tt.allowEmpty)
 			if err != nil {
 				t.Fatalf("CreateResult: %v", err)
 			}

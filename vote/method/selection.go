@@ -227,8 +227,8 @@ func (s Selection) ValidateBallot(vote json.RawMessage) error {
 }
 
 // Result calculates the result.
-func (s Selection) Result(votes []Ballot) (string, error) {
-	return iterateValues(s, votes, func(value string, weight decimal.Decimal, result map[string]decimal.Decimal) error {
+func (s Selection) Result(ballots []Ballot, allowEmpty bool) (string, error) {
+	return iterateValues(s, ballots, allowEmpty, func(value string, weight decimal.Decimal, result map[string]decimal.Decimal) error {
 		var votedOptions []int
 		if err := json.Unmarshal([]byte(value), &votedOptions); err != nil {
 			if s.AllowNota && strings.ToLower(value) == `"nota"` {
@@ -240,10 +240,6 @@ func (s Selection) Result(votes []Ballot) (string, error) {
 
 		for _, votedOption := range votedOptions {
 			result[strconv.Itoa(votedOption)] = result[strconv.Itoa(votedOption)].Add(weight)
-		}
-
-		if len(votedOptions) == 0 {
-			result[keyAbstain] = result[keyAbstain].Add(weight)
 		}
 
 		return nil

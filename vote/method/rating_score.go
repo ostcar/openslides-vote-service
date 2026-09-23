@@ -263,8 +263,8 @@ func (rs RatingScore) ValidateBallot(vote json.RawMessage) error {
 }
 
 // Result calculates the result.
-func (rs RatingScore) Result(votes []Ballot) (string, error) {
-	return iterateValues(rs, votes, func(value string, weight decimal.Decimal, result map[string]decimal.Decimal) error {
+func (rs RatingScore) Result(ballots []Ballot, allowEmpty bool) (string, error) {
+	return iterateValues(rs, ballots, allowEmpty, func(value string, weight decimal.Decimal, result map[string]decimal.Decimal) error {
 		var votedOptions map[string]int
 		if err := json.Unmarshal([]byte(value), &votedOptions); err != nil {
 			return fmt.Errorf("invalid options `%s`: %w", value, err)
@@ -273,10 +273,6 @@ func (rs RatingScore) Result(votes []Ballot) (string, error) {
 		for votedOption, value := range votedOptions {
 			voteWithFactor := weight.Mul(decimal.NewFromInt(int64(value)))
 			result[votedOption] = result[votedOption].Add(voteWithFactor)
-		}
-
-		if len(votedOptions) == 0 {
-			result[keyAbstain] = result[keyAbstain].Add(weight)
 		}
 
 		return nil

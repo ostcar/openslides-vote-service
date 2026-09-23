@@ -28,7 +28,7 @@ type Ballot struct {
 type Method interface {
 	Name() string
 	ValidateBallot(ballot json.RawMessage) error
-	Result(votes []Ballot) (string, error)
+	Result(votes []Ballot, allowEmpty bool) (string, error)
 	RequireOptions() bool
 }
 
@@ -207,15 +207,15 @@ func methodFromString(methodStr string) (Method, error) {
 }
 
 const (
-	keyAbstain      = "abstain"
+	keyEmpty        = "empty"
 	keyNota         = "nota"
 	keyInvalid      = "invalid"
 	keyTotalBallots = "total_ballots"
 )
 
-var reservedOptionNames = []string{keyAbstain, keyNota, keyInvalid, keyTotalBallots}
+var reservedOptionNames = []string{keyEmpty, keyNota, keyInvalid, keyTotalBallots}
 
-func addInvalidAndTotalBallots(result []byte, totalBallots, invalid int) ([]byte, error) {
+func addFieldsToResult(result []byte, totalBallots, invalid int, empty decimal.Decimal) ([]byte, error) {
 	var data map[string]any
 	if err := json.Unmarshal(result, &data); err != nil {
 		return nil, err
@@ -224,6 +224,10 @@ func addInvalidAndTotalBallots(result []byte, totalBallots, invalid int) ([]byte
 	if invalid != 0 {
 		data[keyInvalid] = invalid
 	}
+
+	if !empty.IsZero() {
+		data[keyEmpty] = empty
+	}
 	data[keyTotalBallots] = totalBallots
 
 	return json.Marshal(data)
@@ -231,13 +235,29 @@ func addInvalidAndTotalBallots(result []byte, totalBallots, invalid int) ([]byte
 
 func iterateValues(
 	m Method,
-	votes []Ballot,
+	ballots []Ballot,
+	allowEmpty bool,
 	fn func(value string, weight decimal.Decimal, result map[string]decimal.Decimal) error,
 ) (string, error) {
 	result := make(map[string]decimal.Decimal)
 	invalid := 0
-	for _, vote := range votes {
-		if err := m.ValidateBallot(json.RawMessage(vote.Value)); err != nil {
+	var empty decimal.Decimal
+	for _, ballot := range ballots {
+		weight := ballot.Weight
+		if weight.IsZero() {
+			weight = decimal.NewFromInt(1)
+		}
+
+		if BallotIsEmpty([]byte(ballot.Value)) {
+			if allowEmpty {
+				empty = empty.Add(weight)
+			} else {
+				invalid++
+			}
+			continue
+		}
+
+		if err := m.ValidateBallot(json.RawMessage(ballot.Value)); err != nil {
 			if _, ok := errors.AsType[InvalidBallotError](err); ok {
 				invalid++
 				continue
@@ -245,13 +265,8 @@ func iterateValues(
 			return "", fmt.Errorf("validating vote: %w", err)
 		}
 
-		factor := vote.Weight
-		if factor.IsZero() {
-			factor = decimal.NewFromInt(1)
-		}
-
-		if err := fn(vote.Value, factor, result); err != nil {
-			return "", fmt.Errorf("prcess: %w", err)
+		if err := fn(ballot.Value, weight, result); err != nil {
+			return "", fmt.Errorf("process: %w", err)
 		}
 	}
 
@@ -260,12 +275,17 @@ func iterateValues(
 		return "", fmt.Errorf("encode result: %w", err)
 	}
 
-	withInvalidAndTotalBallots, err := addInvalidAndTotalBallots(encodedResult, len(votes), invalid)
+	withExtraFields, err := addFieldsToResult(encodedResult, len(ballots), invalid, empty)
 	if err != nil {
 		return "", fmt.Errorf("add invalid: %w", err)
 	}
 
-	return string(withInvalidAndTotalBallots), nil
+	return string(withExtraFields), nil
+}
+
+// BallotIsEmpty returns true if the ballot value is empty or "null".
+func BallotIsEmpty(value json.RawMessage) bool {
+	return len(value) == 0 || string(value) == "null"
 }
 
 func hasDuplicates[T comparable](slice []T) bool {
