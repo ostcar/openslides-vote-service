@@ -22,6 +22,7 @@ import (
 	"github.com/OpenSlides/openslides-go/datastore/flow"
 	"github.com/OpenSlides/openslides-go/environment"
 	"github.com/OpenSlides/openslides-go/history"
+	"github.com/OpenSlides/openslides-go/oslog"
 	"github.com/OpenSlides/openslides-go/perm"
 	"github.com/OpenSlides/openslides-vote-service/vote/method"
 	"github.com/jackc/pgx/v5"
@@ -169,6 +170,8 @@ func (v *Vote) Create(ctx context.Context, requestUserID int, r io.Reader) (int,
 	if err := tx.Commit(ctx); err != nil {
 		return 0, fmt.Errorf("commit transaction: %w", err)
 	}
+
+	oslog.Info("Create poll %d", newID)
 
 	return newID, nil
 }
@@ -446,6 +449,8 @@ func (v *Vote) Update(ctx context.Context, pollID int, requestUserID int, r io.R
 		return fmt.Errorf("commit transaction: %w", err)
 	}
 
+	oslog.Info("Update poll %d", pollID)
+
 	return nil
 }
 
@@ -556,11 +561,14 @@ func (v *Vote) Delete(ctx context.Context, pollID int, requestUserID int) error 
 		return fmt.Errorf("commit transaction: %w", err)
 	}
 
+	oslog.Info("Delete poll %d", pollID)
+
 	return nil
 }
 
 // Start validates a poll and set its state to started.
 func (v *Vote) Start(ctx context.Context, pollID int, requestUserID int) error {
+	oslog.Info("Start poll %d ...", pollID)
 	poll, err := fetchPoll(ctx, v.flow, pollID)
 	if err != nil {
 		return fmt.Errorf("fetching poll: %w", err)
@@ -603,6 +611,8 @@ func (v *Vote) Start(ctx context.Context, pollID int, requestUserID int) error {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
 
+	oslog.Info("Start poll %d", pollID)
+
 	return nil
 }
 
@@ -613,6 +623,7 @@ func (v *Vote) Start(ctx context.Context, pollID int, requestUserID int) error {
 // - Sets the `published` flag.
 // - With the flag `anonymize`, clears the connection between poll_ballot and poll_ballot_user
 func (v *Vote) Finalize(ctx context.Context, pollID int, requestUserID int, publish bool, anonymize bool) error {
+	oslog.Info("Finalize poll %d ...", pollID)
 	poll, err := fetchPoll(ctx, v.flow, pollID)
 	if err != nil {
 		return fmt.Errorf("fetching poll: %w", err)
@@ -645,6 +656,7 @@ func (v *Vote) Finalize(ctx context.Context, pollID int, requestUserID int, publ
 	historyMessages = append(historyMessages, "poll finalized")
 
 	if poll.State == `started` {
+		oslog.Info("Finalize poll %d (poll stop)...", pollID)
 		if err := v.pollStop(ctx, tx, poll); err != nil {
 			return fmt.Errorf("stop poll: %w", err)
 		}
@@ -652,6 +664,7 @@ func (v *Vote) Finalize(ctx context.Context, pollID int, requestUserID int, publ
 	}
 
 	if publish && !poll.Published {
+		oslog.Info("Finalize poll %d (poll publish)...", pollID)
 		if err := v.pollPublish(ctx, tx, poll); err != nil {
 			return fmt.Errorf("publish poll: %w", err)
 		}
@@ -659,6 +672,7 @@ func (v *Vote) Finalize(ctx context.Context, pollID int, requestUserID int, publ
 	}
 
 	if anonymize && !poll.Anonymized {
+		oslog.Info("Finalize poll %d (poll anonymize)...", pollID)
 		if err := v.pollAnonymize(ctx, tx, poll); err != nil {
 			return fmt.Errorf("anonymize poll: %w", err)
 		}
@@ -672,6 +686,8 @@ func (v *Vote) Finalize(ctx context.Context, pollID int, requestUserID int, publ
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
+
+	oslog.Info("Finalize poll %d %v", pollID, historyMessages)
 
 	return nil
 }
@@ -1028,6 +1044,8 @@ func (v *Vote) Reset(ctx context.Context, pollID int, requestUserID int) error {
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
+
+	oslog.Info("Reset poll %d", pollID)
 
 	return nil
 }
