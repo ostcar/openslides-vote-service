@@ -29,7 +29,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-var envVoteSecretKeyFile = environment.NewVariable("VOTE_SECRET_KEY_FILE", "/run/secrets/vote_secret_key", "Path to the secret key for secret polls. The content of the file can be anything.")
+var envVoteSecretKeyFile = environment.NewVariable("VOTE_SECRET_KEY_FILE", "/run/secrets/vote_secret_key", "Path to the secret key for secret polls. The content of the file can be anything. Should be at least 32 bytes long.")
 
 // Vote holds the state of the service.
 //

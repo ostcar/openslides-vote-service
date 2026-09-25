@@ -25,4 +25,4 @@ The Service uses the following environment variables:
 * `AUTH_FAKE`: Use user id 1 for every request. Ignores all other auth environment variables. The default is `false`.
 * `AUTH_TOKEN_KEY_FILE`: Key to sign the JWT auth tocken. The default is `/run/secrets/auth_token_key`.
 * `AUTH_COOKIE_KEY_FILE`: Key to sign the JWT auth cookie. The default is `/run/secrets/auth_cookie_key`.
-* `VOTE_SECRET_KEY_FILE`: Path to the secret key for secret polls. The default is `/run/secrets/vote_secret_key`.
+* `VOTE_SECRET_KEY_FILE`: Path to the secret key for secret polls. The content of the file can be anything. Should be at least 32 bytes long. The default is `/run/secrets/vote_secret_key`.
